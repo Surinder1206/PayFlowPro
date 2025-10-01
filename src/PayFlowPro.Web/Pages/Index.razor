@@ -1,0 +1,208 @@
+@page "/"
+@using Microsoft.AspNetCore.Authorization
+@using PayFlowPro.Shared.DTOs.Dashboard
+@using PayFlowPro.Core.Interfaces
+@using PayFlowPro.Web.Components.Dashboard
+@inject IDashboardService DashboardService
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject NavigationManager Navigation
+
+<PageTitle>PayFlow Pro - Dashboard</PageTitle>
+
+<div class="container-fluid px-4">
+    <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+        <h1 class="h2">
+            <i class="fas fa-tachometer-alt me-2"></i>Dashboard
+        </h1>
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="d-flex justify-content-center align-items-center" style="height: 400px;">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <span class="ms-3">Loading dashboard...</span>
+        </div>
+    }
+    else if (errorMessage != null)
+    {
+        <div class="alert alert-danger">
+            <i class="fas fa-exclamation-triangle me-2"></i>
+            <strong>Error:</strong> @errorMessage
+        </div>
+    }
+    else
+    {
+        <AuthorizeView Context="authContext">
+            <Authorized>
+                @if (authContext.User.IsInRole("Admin"))
+                {
+                    <AuthorizeView Roles="Admin" Context="adminContext">
+                        <Authorized>
+                            @if (adminDashboard != null)
+                            {
+                                <AdminDashboard Data="adminDashboard" />
+                            }
+                        </Authorized>
+                    </AuthorizeView>
+                }
+                else if (authContext.User.IsInRole("HR"))
+                {
+                    <AuthorizeView Roles="HR" Context="hrContext">
+                        <Authorized>
+                            @if (hrDashboard != null)
+                            {
+                                <HRDashboard Data="hrDashboard" />
+                            }
+                        </Authorized>
+                    </AuthorizeView>
+                }
+                else if (authContext.User.IsInRole("Employee"))
+                {
+                    <AuthorizeView Roles="Employee" Context="employeeContext">
+                        <Authorized>
+                            @if (employeeDashboard != null)
+                            {
+                                <EmployeeDashboard Data="employeeDashboard" />
+                            }
+                        </Authorized>
+                    </AuthorizeView>
+                }
+                else
+                {
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-circle me-2"></i>
+                        <strong>Access Restricted:</strong> You don't have permission to view any dashboard. Please contact your system administrator.
+                    </div>
+                }
+            </Authorized>
+            <NotAuthorized>
+                <!-- Welcome Screen for Unauthenticated Users -->
+                <div class="hero-section bg-primary text-white text-center py-5 mb-4">
+                    <div class="container">
+                        <h1 class="display-4 fw-bold mb-3">
+                            <i class="fas fa-receipt me-3"></i>PayFlow Pro
+                        </h1>
+                        <p class="lead mb-4">Streamline your payroll management with our comprehensive solution</p>
+                        <a href="/Account/Login" class="btn btn-light btn-lg me-3">
+                            <i class="fas fa-sign-in-alt me-2"></i>Login
+                        </a>
+                        <a href="/Account/Register" class="btn btn-outline-light btn-lg">
+                            <i class="fas fa-user-plus me-2"></i>Register
+                        </a>
+                    </div>
+                </div>
+
+                <!-- Features Section -->
+                <div class="container">
+                    <div class="row mb-5">
+                        <div class="col-12 text-center mb-4">
+                            <h2>System Features</h2>
+                            <p class="text-muted">Everything you need for modern payroll management</p>
+                        </div>
+                    </div>
+
+                    <div class="row g-4 mb-5">
+                        <div class="col-md-4">
+                            <div class="card h-100 text-center">
+                                <div class="card-body">
+                                    <i class="fas fa-users fa-3x text-primary mb-3"></i>
+                                    <h5 class="card-title">Employee Management</h5>
+                                    <p class="card-text">Comprehensive employee records with role-based access control and secure data management.</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-md-4">
+                            <div class="card h-100 text-center">
+                                <div class="card-body">
+                                    <i class="fas fa-calculator fa-3x text-success mb-3"></i>
+                                    <h5 class="card-title">Payroll Processing</h5>
+                                    <p class="card-text">Automated payslip generation with customizable allowances, deductions, and tax calculations.</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-md-4">
+                            <div class="card h-100 text-center">
+                                <div class="card-body">
+                                    <i class="fas fa-chart-dashboard fa-3x text-info mb-3"></i>
+                                    <h5 class="card-title">Analytics & Reports</h5>
+                                    <p class="card-text">Powerful dashboards and reporting tools for insights into payroll trends and compliance.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Quick Login Section -->
+                    <div class="row">
+                        <div class="col-12">
+                            <div class="card bg-light">
+                                <div class="card-body text-center">
+                                    <h5 class="card-title">Demo Accounts</h5>
+                                    <p class="card-text text-muted">Try the system with pre-configured demo accounts</p>
+                                    <div class="row g-2 justify-content-center">
+                                        <div class="col-auto">
+                                            <span class="badge bg-danger">Admin:</span> admin@democompany.com
+                                        </div>
+                                        <div class="col-auto">
+                                            <span class="badge bg-warning">HR:</span> hr@democompany.com  
+                                        </div>
+                                        <div class="col-auto">
+                                            <span class="badge bg-success">Employee:</span> john.doe@democompany.com
+                                        </div>
+                                    </div>
+                                    <p class="small text-muted mt-2">Password for all demo accounts: [Role]123! (e.g., Admin123!)</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </NotAuthorized>
+        </AuthorizeView>
+    }
+</div>
+
+@code {
+    private AdminDashboardDto? adminDashboard;
+    private HRDashboardDto? hrDashboard;
+    private EmployeeDashboardDto? employeeDashboard;
+    private bool isLoading = true;
+    private string? errorMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+            var user = authState.User;
+
+            if (user.Identity?.IsAuthenticated == true)
+            {
+                var userId = user.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ?? string.Empty;
+                
+                if (user.IsInRole("Admin"))
+                {
+                    adminDashboard = await DashboardService.GetAdminDashboardAsync(userId);
+                }
+                else if (user.IsInRole("HR"))
+                {
+                    hrDashboard = await DashboardService.GetHRDashboardAsync(userId);
+                }
+                else if (user.IsInRole("Employee"))
+                {
+                    employeeDashboard = await DashboardService.GetEmployeeDashboardAsync(userId);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Failed to load dashboard data: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+}

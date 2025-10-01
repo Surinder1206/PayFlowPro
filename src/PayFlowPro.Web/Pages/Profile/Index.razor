@@ -1,0 +1,370 @@
+@page "/profile"
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Identity
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.AspNetCore.Components.Forms
+@using PayFlowPro.Core.Services
+@using PayFlowPro.Shared.DTOs.Employee
+@using PayFlowPro.Models.Entities
+@inject IPersonalProfileService ProfileService
+@inject UserManager<ApplicationUser> UserManager
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject IJSRuntime JSRuntime
+@inject NavigationManager Navigation
+@attribute [Authorize(Roles = "Employee")]
+
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h3 mb-0">
+                <i class="fas fa-user-edit text-primary me-2"></i>
+                My Profile
+            </h1>
+            <p class="text-muted">Manage your personal information and settings</p>
+        </div>
+        <div>
+            <button class="btn btn-outline-secondary" @onclick="NavigateBack">
+                <i class="fas fa-arrow-left"></i> Back to Dashboard
+            </button>
+        </div>
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="d-flex justify-content-center align-items-center" style="height: 300px;">
+            <div class="text-center">
+                <div class="spinner-border text-primary mb-3" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <p class="text-muted">Loading your profile...</p>
+            </div>
+        </div>
+    }
+    else if (profile == null)
+    {
+        <div class="alert alert-warning">
+            <h4><i class="fas fa-exclamation-triangle"></i> Profile Not Found</h4>
+            <p>Your employee profile could not be loaded. Please contact your HR administrator.</p>
+        </div>
+    }
+    else
+    {
+        <!-- Success/Error Messages -->
+        @if (!string.IsNullOrEmpty(successMessage))
+        {
+            <div class="alert alert-success alert-dismissible fade show" role="alert">
+                <i class="fas fa-check-circle"></i> @successMessage
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        }
+
+        @if (!string.IsNullOrEmpty(errorMessage))
+        {
+            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                <i class="fas fa-exclamation-circle"></i> @errorMessage
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        }
+
+        <div class="row">
+            <!-- Profile Overview Card -->
+            <div class="col-lg-4 mb-4">
+                <div class="card">
+                    <div class="card-body text-center">
+                        <div class="mb-3">
+                            @if (!string.IsNullOrEmpty(profile.ProfileImageUrl))
+                            {
+                                <img src="@profile.ProfileImageUrl" alt="Profile Picture" 
+                                     class="rounded-circle" style="width: 120px; height: 120px; object-fit: cover;">
+                            }
+                            else
+                            {
+                                <div class="bg-primary rounded-circle d-inline-flex align-items-center justify-content-center text-white" 
+                                     style="width: 120px; height: 120px; font-size: 3rem;">
+                                    @profile.FirstName.Substring(0, 1)@profile.LastName.Substring(0, 1)
+                                </div>
+                            }
+                        </div>
+                        <h5 class="mb-1">@profile.FirstName @profile.LastName</h5>
+                        <p class="text-muted mb-2">@profile.JobTitle</p>
+                        <p class="text-muted mb-3">
+                            <small>@profile.DepartmentName • @profile.CompanyName</small>
+                        </p>
+                        <span class="badge bg-primary">@profile.EmployeeCode</span>
+                        
+                        <hr class="my-3">
+                        
+                        <div class="text-start">
+                            <p class="mb-2">
+                                <small class="text-muted">Email:</small><br>
+                                <strong>@profile.Email</strong>
+                            </p>
+                            <p class="mb-2">
+                                <small class="text-muted">Date of Joining:</small><br>
+                                <strong>@profile.DateOfJoining.ToString("MMM dd, yyyy")</strong>
+                            </p>
+                            <p class="mb-0">
+                                <small class="text-muted">Years of Service:</small><br>
+                                <strong>@CalculateYearsOfService() years</strong>
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Editable Profile Information -->
+            <div class="col-lg-8 mb-4">
+                <form @onsubmit="HandleUpdateProfile" @onsubmit:preventDefault="true">
+                    
+                    <!-- Personal Information -->
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            <h6 class="mb-0">
+                                <i class="fas fa-user me-2"></i>Personal Information
+                                <small class="text-muted ms-2">(You can edit these fields)</small>
+                            </h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label">Phone Number</label>
+                                    <input type="tel" @bind="updateDto.PhoneNumber" class="form-control" placeholder="Enter phone number" />
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label">Gender</label>
+                                    <select @bind="updateDto.Gender" class="form-select">
+                                        <option value="">Select Gender</option>
+                                        <option value="Male">Male</option>
+                                        <option value="Female">Female</option>
+                                        <option value="Other">Other</option>
+                                        <option value="Prefer not to say">Prefer not to say</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label">Marital Status</label>
+                                    <select @bind="updateDto.MaritalStatus" class="form-select">
+                                        <option value="">Select Status</option>
+                                        <option value="Single">Single</option>
+                                        <option value="Married">Married</option>
+                                        <option value="Divorced">Divorced</option>
+                                        <option value="Widowed">Widowed</option>
+                                        <option value="Separated">Separated</option>
+                                    </select>
+                                </div>
+                                <div class="col-12 mb-3">
+                                    <label class="form-label">Address</label>
+                                    <textarea @bind="updateDto.Address" class="form-control" rows="3" placeholder="Enter your address"></textarea>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Banking Information -->
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            <h6 class="mb-0">
+                                <i class="fas fa-university me-2"></i>Banking Information
+                                <small class="text-muted ms-2">(For salary payments)</small>
+                            </h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label">Bank Name</label>
+                                    <input type="text" @bind="updateDto.BankName" class="form-control" placeholder="Enter bank name" />
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label">Account Number</label>
+                                    <input type="text" @bind="updateDto.BankAccountNumber" class="form-control" placeholder="Enter account number" />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Read-Only Information -->
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            <h6 class="mb-0">
+                                <i class="fas fa-lock me-2"></i>Company Information
+                                <small class="text-muted ms-2">(Read-only - Contact HR to change)</small>
+                            </h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label text-muted">First Name</label>
+                                    <input type="text" class="form-control bg-light" value="@profile.FirstName" readonly />
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label text-muted">Last Name</label>
+                                    <input type="text" class="form-control bg-light" value="@profile.LastName" readonly />
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label text-muted">Date of Birth</label>
+                                    <input type="text" class="form-control bg-light" value="@profile.DateOfBirth.ToString("MMM dd, yyyy")" readonly />
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label text-muted">National ID</label>
+                                    <input type="text" class="form-control bg-light" value="@(profile.NationalId ?? "Not provided")" readonly />
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label text-muted">Tax ID</label>
+                                    <input type="text" class="form-control bg-light" value="@(profile.TaxId ?? "Not provided")" readonly />
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label text-muted">Basic Salary</label>
+                                    <input type="text" class="form-control bg-light" value="@profile.BasicSalary.ToString("C")" readonly />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Action Buttons -->
+                    <div class="d-flex justify-content-between">
+                        <button type="button" class="btn btn-outline-secondary" @onclick="ResetForm">
+                            <i class="fas fa-undo"></i> Reset Changes
+                        </button>
+                        <button type="submit" class="btn btn-primary" disabled="@isUpdating">
+                            @if (isUpdating)
+                            {
+                                <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                            }
+                            <i class="fas fa-save"></i> Update Profile
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private PersonalProfileDto? profile;
+    private UpdatePersonalProfileDto updateDto = new();
+    private bool isLoading = true;
+    private bool isUpdating = false;
+    private string? errorMessage;
+    private string? successMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadProfile();
+    }
+
+    private async Task LoadProfile()
+    {
+        try
+        {
+            isLoading = true;
+            // Get current user ID from the authentication context
+            // Since we have [Authorize(Roles = "Employee")], the user is already authenticated
+            // We need to get the user ID through the authentication state
+            var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+            var user = authState.User;
+            
+            if (user?.Identity?.IsAuthenticated == true)
+            {
+                var userId = UserManager.GetUserId(user);
+                if (!string.IsNullOrEmpty(userId))
+                {
+                    profile = await ProfileService.GetPersonalProfileAsync(userId);
+                    
+                    if (profile != null)
+                    {
+                        // Initialize update DTO with current values
+                        updateDto = new UpdatePersonalProfileDto
+                        {
+                            EmployeeId = profile.EmployeeId,
+                            PhoneNumber = profile.PhoneNumber,
+                            Address = profile.Address,
+                            Gender = profile.Gender,
+                            MaritalStatus = profile.MaritalStatus,
+                            BankName = profile.BankName,
+                            BankAccountNumber = profile.BankAccountNumber
+                        };
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error loading profile: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task HandleUpdateProfile()
+    {
+        try
+        {
+            isUpdating = true;
+            errorMessage = null;
+            successMessage = null;
+
+            var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+            var user = authState.User;
+            
+            if (user?.Identity?.IsAuthenticated == true)
+            {
+                var userId = UserManager.GetUserId(user);
+                if (!string.IsNullOrEmpty(userId))
+                {
+                    var result = await ProfileService.UpdatePersonalProfileAsync(userId, updateDto);
+                    
+                    if (result.Success)
+                    {
+                        successMessage = result.Message;
+                        // Reload profile to show updated data
+                        await LoadProfile();
+                    }
+                    else
+                    {
+                        errorMessage = result.Message;
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error updating profile: {ex.Message}";
+        }
+        finally
+        {
+            isUpdating = false;
+        }
+    }
+
+    private void ResetForm()
+    {
+        if (profile != null)
+        {
+            updateDto = new UpdatePersonalProfileDto
+            {
+                EmployeeId = profile.EmployeeId,
+                PhoneNumber = profile.PhoneNumber,
+                Address = profile.Address,
+                Gender = profile.Gender,
+                MaritalStatus = profile.MaritalStatus,
+                BankName = profile.BankName,
+                BankAccountNumber = profile.BankAccountNumber
+            };
+        }
+        
+        errorMessage = null;
+        successMessage = null;
+    }
+
+    private void NavigateBack()
+    {
+        Navigation.NavigateTo("/");
+    }
+
+    private int CalculateYearsOfService()
+    {
+        if (profile == null) return 0;
+        return DateTime.Now.Year - profile.DateOfJoining.Year;
+    }
+}

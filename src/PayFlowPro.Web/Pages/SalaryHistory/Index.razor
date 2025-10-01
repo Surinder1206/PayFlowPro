@@ -1,0 +1,392 @@
+@page "/salary-history"
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Identity
+@using Microsoft.AspNetCore.Components.Authorization
+@using PayFlowPro.Core.Services
+@using PayFlowPro.Shared.DTOs.SalaryHistory
+@using PayFlowPro.Models.Entities
+@inject ISalaryHistoryService SalaryHistoryService
+@inject UserManager<ApplicationUser> UserManager
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject IJSRuntime JSRuntime
+@inject NavigationManager Navigation
+@attribute [Authorize(Roles = "Employee,HR,Admin")]
+
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h3 mb-0">
+                <i class="fas fa-chart-line text-success me-2"></i>
+                Salary History & Analytics
+            </h1>
+            <p class="text-muted">Track your compensation growth and compare with industry standards</p>
+        </div>
+        <div>
+            <button class="btn btn-outline-secondary" @onclick="NavigateBack">
+                <i class="fas fa-arrow-left"></i> Back to Dashboard
+            </button>
+        </div>
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="d-flex justify-content-center align-items-center" style="height: 300px;">
+            <div class="text-center">
+                <div class="spinner-border text-primary mb-3" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <p class="text-muted">Loading salary data...</p>
+            </div>
+        </div>
+    }
+    else if (!string.IsNullOrEmpty(errorMessage))
+    {
+        <div class="alert alert-danger">
+            <h4><i class="fas fa-exclamation-triangle"></i> Error</h4>
+            <p>@errorMessage</p>
+        </div>
+    }
+    else if (salaryHistory != null)
+    {
+        <!-- Salary Overview Cards -->
+        <div class="row mb-4">
+            <div class="col-lg-3 col-md-6 mb-3">
+                <div class="card bg-gradient-success text-white h-100">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between">
+                            <div>
+                                <div class="text-white-75 small">Current Salary</div>
+                                <h2 class="mb-0">@salaryHistory.CurrentSalary.ToString("C0")</h2>
+                                <div class="small">
+                                    <span class="text-white-75">Monthly</span>
+                                </div>
+                            </div>
+                            <div class="align-self-center">
+                                <i class="fas fa-dollar-sign fa-2x text-white-50"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-3 col-md-6 mb-3">
+                <div class="card bg-gradient-primary text-white h-100">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between">
+                            <div>
+                                <div class="text-white-75 small">Total Growth</div>
+                                <h2 class="mb-0">@salaryHistory.TotalIncrease.ToString("C0")</h2>
+                                <div class="small">
+                                    <span class="text-white-75">@salaryHistory.TotalIncreasePercentage.ToString("F1")% increase</span>
+                                </div>
+                            </div>
+                            <div class="align-self-center">
+                                <i class="fas fa-trending-up fa-2x text-white-50"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-3 col-md-6 mb-3">
+                <div class="card bg-gradient-info text-white h-100">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between">
+                            <div>
+                                <div class="text-white-75 small">Years of Service</div>
+                                <h2 class="mb-0">@salaryHistory.YearsOfService</h2>
+                                <div class="small">
+                                    <span class="text-white-75">Since @salaryHistory.JoiningDate.ToString("MMM yyyy")</span>
+                                </div>
+                            </div>
+                            <div class="align-self-center">
+                                <i class="fas fa-calendar-alt fa-2x text-white-50"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-3 col-md-6 mb-3">
+                <div class="card bg-gradient-warning text-white h-100">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between">
+                            <div>
+                                <div class="text-white-75 small">Avg Annual Growth</div>
+                                <h2 class="mb-0">@salaryHistory.AverageAnnualIncrease.ToString("C0")</h2>
+                                <div class="small">
+                                    <span class="text-white-75">@salaryHistory.NumberOfIncreases increases</span>
+                                </div>
+                            </div>
+                            <div class="align-self-center">
+                                <i class="fas fa-chart-bar fa-2x text-white-50"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Charts and Analytics Row -->
+        <div class="row mb-4">
+            <!-- Salary Growth Chart -->
+            <div class="col-lg-8 mb-4">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i class="fas fa-chart-line me-2"></i>Salary Growth Timeline
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="salaryGrowthChart" style="height: 300px;">
+                            <!-- Chart will be rendered here with JavaScript -->
+                            <div class="d-flex align-items-center justify-content-center h-100">
+                                <div class="text-center">
+                                    <i class="fas fa-chart-line fa-3x text-muted mb-3"></i>
+                                    <p class="text-muted">Salary growth visualization</p>
+                                    <small class="text-muted">
+                                        From @salaryHistory.InitialSalary.ToString("C0") to @salaryHistory.CurrentSalary.ToString("C0")
+                                    </small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Salary Comparisons -->
+            <div class="col-lg-4 mb-4">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i class="fas fa-balance-scale me-2"></i>Salary Comparisons
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        @if (salaryComparisons != null && salaryComparisons.Any())
+                        {
+                            @foreach (var comparison in salaryComparisons)
+                            {
+                                <div class="mb-3">
+                                    <div class="d-flex justify-content-between align-items-center mb-1">
+                                        <strong class="small">@comparison.ComparisonType</strong>
+                                        <span class="badge @(comparison.Position == "Above Average" ? "bg-success" : "bg-warning")">
+                                            @comparison.Position
+                                        </span>
+                                    </div>
+                                    <div class="small text-muted mb-1">
+                                        Your Salary: @comparison.EmployeeSalary.ToString("C0")
+                                    </div>
+                                    <div class="small text-muted mb-1">
+                                        Average: @comparison.ComparisonAverage.ToString("C0")
+                                    </div>
+                                    <div class="small @(comparison.DifferenceAmount >= 0 ? "text-success" : "text-danger")">
+                                        <i class="fas @(comparison.DifferenceAmount >= 0 ? "fa-arrow-up" : "fa-arrow-down")"></i>
+                                        @Math.Abs(comparison.DifferenceAmount).ToString("C0") (@Math.Abs(comparison.DifferencePercentage).ToString("F1")%)
+                                    </div>
+                                </div>
+                                <hr class="my-2">
+                            }
+                        }
+                        else
+                        {
+                            <div class="text-center text-muted">
+                                <i class="fas fa-info-circle"></i>
+                                <p class="mb-0">No comparison data available</p>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Salary History Table -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">
+                            <i class="fas fa-history me-2"></i>Salary Change History
+                        </h5>
+                        <span class="badge bg-primary">@salaryHistory.NumberOfIncreases increases</span>
+                    </div>
+                    <div class="card-body">
+                        @if (salaryHistory.History.Any())
+                        {
+                            <div class="table-responsive">
+                                <table class="table table-hover">
+                                    <thead>
+                                        <tr>
+                                            <th>Date</th>
+                                            <th>Previous Salary</th>
+                                            <th>New Salary</th>
+                                            <th>Increase</th>
+                                            <th>%</th>
+                                            <th>Reason</th>
+                                            <th>Approved By</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var entry in salaryHistory.History)
+                                        {
+                                            <tr>
+                                                <td>@entry.EffectiveDate.ToString("MMM dd, yyyy")</td>
+                                                <td>@entry.PreviousSalary.ToString("C0")</td>
+                                                <td>@entry.NewSalary.ToString("C0")</td>
+                                                <td class="text-success">
+                                                    <i class="fas fa-arrow-up"></i> @entry.SalaryIncrease.ToString("C0")
+                                                </td>
+                                                <td class="text-success">+@entry.IncreasePercentage.ToString("F1")%</td>
+                                                <td>@entry.Reason</td>
+                                                <td>@entry.ApprovedBy</td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="text-center text-muted py-4">
+                                <i class="fas fa-info-circle fa-2x mb-3"></i>
+                                <p class="mb-0">No salary change history available</p>
+                                <small>This could be your first position or no raises have been recorded yet.</small>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Future Projections -->
+        @if (salaryProjections != null && salaryProjections.Any())
+        {
+            <div class="row">
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="mb-0">
+                                <i class="fas fa-crystal-ball me-2"></i>Salary Projections
+                            </h5>
+                            <small class="text-muted">Based on @salaryProjections.First().ProjectionBasis</small>
+                        </div>
+                        <div class="card-body">
+                            <div class="table-responsive">
+                                <table class="table table-sm">
+                                    <thead>
+                                        <tr>
+                                            <th>Year</th>
+                                            <th>Projected Salary</th>
+                                            <th>Expected Increase</th>
+                                            <th>Growth Rate</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var projection in salaryProjections)
+                                        {
+                                            <tr>
+                                                <td>@projection.Year</td>
+                                                <td>@projection.ProjectedSalary.ToString("C0")</td>
+                                                <td class="text-success">+@projection.ProjectedIncrease.ToString("C0")</td>
+                                                <td>@projection.ProjectedIncreasePercentage.ToString("F1")%</td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div class="alert alert-info mt-3">
+                                <i class="fas fa-info-circle"></i>
+                                <strong>Note:</strong> These projections are estimates based on historical data and should not be considered guaranteed future increases.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+    }
+</div>
+
+@code {
+    private SalaryHistorySummaryDto? salaryHistory;
+    private List<SalaryComparisonDto>? salaryComparisons;
+    private List<SalaryProjectionDto>? salaryProjections;
+    private bool isLoading = true;
+    private string? errorMessage;
+    private int employeeId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadSalaryData();
+    }
+
+    private async Task LoadSalaryData()
+    {
+        try
+        {
+            isLoading = true;
+            errorMessage = null;
+
+            // Get current user and find their employee ID
+            var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+            var user = authState.User;
+
+            if (user?.Identity?.IsAuthenticated == true)
+            {
+                var userId = UserManager.GetUserId(user);
+                if (!string.IsNullOrEmpty(userId))
+                {
+                    // For now, we need to get the employee ID from the user context
+                    // In a real application, you might store this in claims or have a mapping service
+                    employeeId = 1; // Placeholder - should be retrieved from user context
+
+                    // Load salary history
+                    var historyResponse = await SalaryHistoryService.GetEmployeeSalaryHistoryAsync(employeeId);
+                    if (historyResponse.IsSuccess)
+                    {
+                        salaryHistory = historyResponse.Data;
+                    }
+                    else
+                    {
+                        errorMessage = historyResponse.Message;
+                        return;
+                    }
+
+                    // Load salary comparisons
+                    var comparisonsResponse = await SalaryHistoryService.GetSalaryComparisonsAsync(employeeId);
+                    if (comparisonsResponse.IsSuccess)
+                    {
+                        salaryComparisons = comparisonsResponse.Data;
+                    }
+
+                    // Load salary projections
+                    var projectionsResponse = await SalaryHistoryService.GetSalaryProjectionsAsync(employeeId);
+                    if (projectionsResponse.IsSuccess)
+                    {
+                        salaryProjections = projectionsResponse.Data;
+                    }
+                }
+                else
+                {
+                    errorMessage = "Unable to identify current user";
+                }
+            }
+            else
+            {
+                errorMessage = "User not authenticated";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error loading salary data: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void NavigateBack()
+    {
+        Navigation.NavigateTo("/");
+    }
+}

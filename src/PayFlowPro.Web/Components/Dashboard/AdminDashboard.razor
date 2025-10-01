@@ -1,0 +1,311 @@
+@using PayFlowPro.Shared.DTOs.Dashboard
+@inject IJSRuntime JSRuntime
+
+<div class="admin-dashboard">
+    <!-- Admin Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="alert alert-primary">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h4 class="alert-heading mb-1">
+                            <i class="fas fa-crown me-2"></i>System Administration Dashboard
+                        </h4>
+                        <p class="mb-0">Welcome back, <strong>@Data.UserName</strong> - Full System Control & Oversight</p>
+                        <small class="text-muted">Last login: @Data.LastLoginAt.ToString("MMM dd, yyyy 'at' HH:mm")</small>
+                    </div>
+                    <div class="text-end">
+                        <span class="badge bg-danger fs-6">@Data.Role</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- System Metrics Cards -->
+    <div class="row mb-4">
+        <div class="col-lg-3 col-md-6 mb-3">
+            <div class="card bg-gradient-secondary text-black h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <div class="text-black-75 small">Total Employees</div>
+                            <h2 class="mb-0">@Data.TotalEmployees</h2>
+                            <div class="small">
+                                <span class="text-success">@Data.ActiveEmployees active</span>
+                            </div>
+                        </div>
+                        <div class="align-self-center">
+                            <i class="fas fa-users fa-2x text-black-50"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-3 col-md-6 mb-3">
+            <div class="card bg-gradient-success text-black h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <div class="text-black-75 small">Total Users</div>
+                            <h2 class="mb-0">@Data.TotalUsers</h2>
+                            <div class="small">
+                                <span class="text-black-75">System accounts</span>
+                            </div>
+                        </div>
+                        <div class="align-self-center">
+                            <i class="fas fa-user-cog fa-2x text-black-50"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-3 col-md-6 mb-3">
+            <div class="card bg-gradient-warning text-black h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <div class="text-black-75 small">Pending Approvals</div>
+                            <h2 class="mb-0">@Data.PendingApprovals</h2>
+                            <div class="small">
+                                <span class="text-black-75">Require attention</span>
+                            </div>
+                        </div>
+                        <div class="align-self-center">
+                            <i class="fas fa-exclamation-triangle fa-2x text-black-50"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-3 col-md-6 mb-3">
+            <div class="card bg-gradient-info text-black h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <div class="text-black-75 small">Monthly Payroll</div>
+                            <h2 class="mb-0">@Data.TotalPayrollThisMonth.ToString("C0")</h2>
+                            <div class="small">
+                                <span class="text-black-75">This month</span>
+                            </div>
+                        </div>
+                        <div class="align-self-center">
+                            <i class="fas fa-dollar-sign fa-2x text-black-50"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Admin Action Cards -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="fas fa-tools me-2"></i>Administrator Actions
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-lg-2 col-md-4 col-6">
+                            <a href="/admin/users" class="btn btn-outline-primary w-100 h-100 d-flex flex-column align-items-center justify-content-center p-3">
+                                <i class="fas fa-users-cog fa-2x mb-2"></i>
+                                <span>User Management</span>
+                            </a>
+                        </div>
+                        <div class="col-lg-2 col-md-4 col-6">
+                            <a href="/audit/logs" class="btn btn-outline-warning w-100 h-100 d-flex flex-column align-items-center justify-content-center p-3">
+                                <i class="fas fa-shield-alt fa-2x mb-2"></i>
+                                <span>Audit Logs</span>
+                            </a>
+                        </div>
+                        <div class="col-lg-2 col-md-4 col-6">
+                            <a href="/reports" class="btn btn-outline-info w-100 h-100 d-flex flex-column align-items-center justify-content-center p-3">
+                                <i class="fas fa-chart-bar fa-2x mb-2"></i>
+                                <span>System Reports</span>
+                            </a>
+                        </div>
+                        <div class="col-lg-2 col-md-4 col-6">
+                            <a href="/employees" class="btn btn-outline-success w-100 h-100 d-flex flex-column align-items-center justify-content-center p-3">
+                                <i class="fas fa-users fa-2x mb-2"></i>
+                                <span>All Employees</span>
+                            </a>
+                        </div>
+                        <div class="col-lg-2 col-md-4 col-6">
+                            <a href="/payslips" class="btn btn-outline-secondary w-100 h-100 d-flex flex-column align-items-center justify-content-center p-3">
+                                <i class="fas fa-file-invoice-dollar fa-2x mb-2"></i>
+                                <span>All Payslips</span>
+                            </a>
+                        </div>
+                        <div class="col-lg-2 col-md-4 col-6">
+                            <button class="btn btn-outline-danger w-100 h-100 d-flex flex-column align-items-center justify-content-center p-3" @onclick="ShowSystemSettings">
+                                <i class="fas fa-cog fa-2x mb-2"></i>
+                                <span>Settings</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- System Information Row -->
+    <div class="row mb-4">
+        <!-- System Activities -->
+        <div class="col-lg-6 mb-4">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h6 class="mb-0">
+                        <i class="fas fa-list-alt me-2"></i>Recent System Activities
+                    </h6>
+                </div>
+                <div class="card-body">
+                    @if (Data.SystemActivities.Any())
+                    {
+                        <div class="timeline">
+                            @foreach (var activity in Data.SystemActivities.Take(8))
+                            {
+                                <div class="timeline-item mb-3">
+                                    <div class="d-flex">
+                                        <div class="flex-shrink-0">
+                                            <span class="badge bg-@GetSeverityColor(activity.Severity) rounded-pill">
+                                                <i class="fas fa-@GetSeverityIcon(activity.Severity)"></i>
+                                            </span>
+                                        </div>
+                                        <div class="flex-grow-1 ms-3">
+                                            <h6 class="mb-1">@activity.Activity</h6>
+                                            <p class="text-muted small mb-1">@activity.Category</p>
+                                            <small class="text-muted">@activity.Timestamp.ToString("MMM dd, HH:mm")</small>
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="text-center text-muted py-4">
+                            <i class="fas fa-history fa-2x mb-2"></i>
+                            <p>No recent system activities</p>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <!-- User Activities -->
+        <div class="col-lg-6 mb-4">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h6 class="mb-0">
+                        <i class="fas fa-user-shield me-2"></i>Recent User Activities
+                    </h6>
+                </div>
+                <div class="card-body">
+                    @if (Data.UserActivities.Any())
+                    {
+                        <div class="list-group list-group-flush">
+                            @foreach (var userActivity in Data.UserActivities.Take(8))
+                            {
+                                <div class="list-group-item px-0 border-0">
+                                    <div class="d-flex justify-content-between">
+                                        <div>
+                                            <h6 class="mb-1">@userActivity.UserName</h6>
+                                            <p class="mb-1 small">@userActivity.Action</p>
+                                            <small class="text-muted">@userActivity.IpAddress</small>
+                                        </div>
+                                        <small class="text-muted">@userActivity.Timestamp.ToString("HH:mm")</small>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="text-center text-muted py-4">
+                            <i class="fas fa-users fa-2x mb-2"></i>
+                            <p>No recent user activities</p>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Database Statistics -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h6 class="mb-0">
+                        <i class="fas fa-database me-2"></i>Database Statistics
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="row text-center">
+                        <div class="col-md-3">
+                            <div class="border-end">
+                                <h4 class="mb-0 text-primary">@Data.DatabaseStats.TotalRecords</h4>
+                                <small class="text-muted">Total Records</small>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="border-end">
+                                <h4 class="mb-0 text-success">@Data.DatabaseStats.ActiveConnections</h4>
+                                <small class="text-muted">Active Connections</small>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="border-end">
+                                <h4 class="mb-0 text-info">@Data.DatabaseStats.QueryPerformanceMs.ToString("F1")ms</h4>
+                                <small class="text-muted">Avg Query Time</small>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <h4 class="mb-0 text-warning">@Data.TotalDepartments</h4>
+                            <small class="text-muted">Departments</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter] public AdminDashboardDto Data { get; set; } = new();
+
+    private string GetSeverityColor(string severity)
+    {
+        return severity?.ToLower() switch
+        {
+            "error" => "danger",
+            "warning" => "warning",
+            "info" => "info",
+            "success" => "success",
+            _ => "secondary"
+        };
+    }
+
+    private string GetSeverityIcon(string severity)
+    {
+        return severity?.ToLower() switch
+        {
+            "error" => "exclamation-triangle",
+            "warning" => "exclamation-circle",
+            "info" => "info-circle",
+            "success" => "check-circle",
+            _ => "circle"
+        };
+    }
+
+    private async Task ShowSystemSettings()
+    {
+        await JSRuntime.InvokeVoidAsync("alert", "System Settings functionality coming soon!");
+    }
+}

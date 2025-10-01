@@ -1,0 +1,491 @@
+@page "/employees"
+@using Microsoft.EntityFrameworkCore
+@using PayFlowPro.Data.Context
+@using PayFlowPro.Models.Entities
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.AspNetCore.Components.Web
+@inject IDbContextFactory<ApplicationDbContext> DbContextFactory
+@inject NavigationManager Navigation
+@inject IJSRuntime JSRuntime
+@attribute [Authorize(Roles = "Admin,HR,Manager")]
+
+<PageTitle>Employees - PayFlow Pro</PageTitle>
+
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-md-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h2>
+                    <i class="fas fa-users"></i> Employee Management
+                    <small class="text-muted">(@employees.Count employees)</small>
+                </h2>
+                <AuthorizeView Roles="Admin,HR">
+                    <Authorized>
+                        <a href="/employees/create" class="btn btn-primary">
+                            <i class="fas fa-plus"></i> Add New Employee
+                        </a>
+                    </Authorized>
+                </AuthorizeView>
+            </div>
+
+            <!-- Filters and Search -->
+            <div class="card mb-4">
+                <div class="card-body">
+                    @* Debug info - remove in production *@
+                    @if (!string.IsNullOrWhiteSpace(searchTerm))
+                    {
+                        <div class="alert alert-info small mb-2">
+                            <strong>Debug:</strong> Searching for: "@searchTerm" | Total employees: @employees.Count | Filtered: @filteredEmployees.Count
+                        </div>
+                    }
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div class="form-group">
+                                <label for="searchTerm">Search Employees</label>
+                                <div class="d-flex">
+                                    <input type="text" class="form-control" id="searchTerm" @bind="searchTerm" @oninput="OnSearchInputChanged" placeholder="Name, email, employee code..." />
+                                    <button class="btn btn-outline-secondary ml-1" type="button" @onclick="ClearSearch" title="Clear search">
+                                        <i class="fas fa-times"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="form-group">
+                                <label for="departmentFilter">Department</label>
+                                <select class="form-control" id="departmentFilter" @bind="selectedDepartmentId" @bind:after="OnFiltersChanged">
+                                    <option value="">All Departments</option>
+                                    @foreach (var dept in departments)
+                                    {
+                                        <option value="@dept.Id">@dept.Name</option>
+                                    }
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="form-group">
+                                <label for="statusFilter">Status</label>
+                                <select class="form-control" id="statusFilter" @bind="selectedStatus" @bind:after="OnFiltersChanged">
+                                    <option value="">All Status</option>
+                                    <option value="@EmploymentStatus.Active">Active</option>
+                                    <option value="@EmploymentStatus.Inactive">Inactive</option>
+                                    <option value="@EmploymentStatus.OnLeave">On Leave</option>
+                                    <option value="@EmploymentStatus.Terminated">Terminated</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-2">
+                            <div class="form-group">
+                                <label>&nbsp;</label>
+                                <div>
+                                    <button class="btn btn-secondary w-100" @onclick="ResetFilters">
+                                        <i class="fas fa-undo"></i> Reset
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Employees Table -->
+            <div class="card">
+                <div class="card-body">
+                    @if (isLoading)
+                    {
+                        <div class="text-center py-5">
+                            <div class="spinner-border" role="status">
+                                <span class="sr-only">Loading...</span>
+                            </div>
+                            <p class="mt-2">Loading employees...</p>
+                        </div>
+                    }
+                    else if (filteredEmployees.Any())
+                    {
+                        <div class="table-responsive">
+                            <table class="table table-striped table-hover">
+                                <thead class="thead-dark">
+                                    <tr>
+                                        <th>Photo</th>
+                                        <th @onclick='() => SortEmployees("Name")' style="cursor: pointer;">
+                                            Name 
+                                            @if (sortColumn == "Name")
+                                            {
+                                                <i class="fas fa-sort-@(sortDirection == "asc" ? "up" : "down")"></i>
+                                            }
+                                        </th>
+                                        <th @onclick='() => SortEmployees("EmployeeCode")' style="cursor: pointer;">
+                                            Employee ID
+                                            @if (sortColumn == "EmployeeCode")
+                                            {
+                                                <i class="fas fa-sort-@(sortDirection == "asc" ? "up" : "down")"></i>
+                                            }
+                                        </th>
+                                        <th>Department</th>
+                                        <th>Job Title</th>
+                                        <th>Email</th>
+                                        <th>Phone</th>
+                                        <th @onclick='() => SortEmployees("Status")' style="cursor: pointer;">
+                                            Status
+                                            @if (sortColumn == "Status")
+                                            {
+                                                <i class="fas fa-sort-@(sortDirection == "asc" ? "up" : "down")"></i>
+                                            }
+                                        </th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var employee in filteredEmployees)
+                                    {
+                                        <tr>
+                                            <td>
+                                                @if (!string.IsNullOrEmpty(employee.ProfileImageUrl))
+                                                {
+                                                    <img src="@employee.ProfileImageUrl" alt="Profile" class="rounded-circle" style="width: 40px; height: 40px; object-fit: cover;" />
+                                                }
+                                                else
+                                                {
+                                                    <div class="rounded-circle bg-secondary d-flex align-items-center justify-content-center" style="width: 40px; height: 40px;">
+                                                        <i class="fas fa-user text-white"></i>
+                                                    </div>
+                                                }
+                                            </td>
+                                            <td>
+                                                <strong>@employee.FirstName @employee.LastName</strong>
+                                            </td>
+                                            <td>
+                                                <span class="badge badge-secondary">@employee.EmployeeCode</span>
+                                            </td>
+                                            <td>@(employee.Department?.Name ?? "N/A")</td>
+                                            <td>@employee.JobTitle</td>
+                                            <td>
+                                                <a href="mailto:@employee.Email">@employee.Email</a>
+                                            </td>
+                                            <td>@employee.PhoneNumber</td>
+                                            <td>
+                                                <span class="badge @GetStatusBadgeClass(employee.Status)">
+                                                    @employee.Status.ToString()
+                                                </span>
+                                            </td>
+                                            <td>
+                                                <div class="btn-group" role="group">
+                                                    <a href="/employees/@employee.Id" class="btn btn-sm btn-info" title="View Details">
+                                                        <i class="fas fa-eye"></i>
+                                                    </a>
+                                                    <AuthorizeView Roles="Admin,HR">
+                                                        <Authorized>
+                                                            <a href="/employees/@employee.Id/edit" class="btn btn-sm btn-warning" title="Edit">
+                                                                <i class="fas fa-edit"></i>
+                                                            </a>
+                                                            <button class="btn btn-sm btn-danger" @onclick="() => ConfirmDelete(employee)" title="Delete">
+                                                                <i class="fas fa-trash"></i>
+                                                            </button>
+                                                        </Authorized>
+                                                    </AuthorizeView>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <!-- Pagination -->
+                        @if (totalPages > 1)
+                        {
+                            <nav aria-label="Employee pagination">
+                                <ul class="pagination justify-content-center mt-3">
+                                    <li class="page-item @(currentPage == 1 ? "disabled" : "")">
+                                        <button class="page-link" @onclick="() => ChangePage(currentPage - 1)" disabled="@(currentPage == 1)">
+                                            Previous
+                                        </button>
+                                    </li>
+
+                                    @for (int pageNum = Math.Max(1, currentPage - 2); pageNum <= Math.Min(totalPages, currentPage + 2); pageNum++)
+                                    {
+                                        var pageNumber = pageNum; // Capture for lambda
+                                        <li class="page-item @(pageNumber == currentPage ? "active" : "")">
+                                            <button class="page-link" @onclick="() => ChangePage(pageNumber)">@pageNumber</button>
+                                        </li>
+                                    }
+
+                                    <li class="page-item @(currentPage == totalPages ? "disabled" : "")">
+                                        <button class="page-link" @onclick="() => ChangePage(currentPage + 1)" disabled="@(currentPage == totalPages)">
+                                            Next
+                                        </button>
+                                    </li>
+                                </ul>
+                            </nav>
+                        }
+                    }
+                    else
+                    {
+                        <div class="text-center py-5">
+                            <i class="fas fa-users fa-3x text-muted mb-3"></i>
+                            <h5 class="text-muted">No employees found</h5>
+                            <p class="text-muted">
+                                @if (HasActiveFilters())
+                                {
+                                    <span>No employees match your current filters.</span>
+                                    <button class="btn btn-link p-0" @onclick="ResetFilters">Clear filters</button>
+                                }
+                                else
+                                {
+                                    <span>Get started by adding your first employee.</span>
+                                }
+                            </p>
+                            <AuthorizeView Roles="Admin,HR">
+                                <Authorized>
+                                    @if (!HasActiveFilters())
+                                    {
+                                        <a href="/employees/create" class="btn btn-primary">
+                                            <i class="fas fa-plus"></i> Add First Employee
+                                        </a>
+                                    }
+                                </Authorized>
+                            </AuthorizeView>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private List<Employee> employees = new();
+    private List<Employee> filteredEmployees = new();
+    private List<Department> departments = new();
+    
+    private string searchTerm = string.Empty;
+    private int? selectedDepartmentId;
+    private EmploymentStatus? selectedStatus;
+    
+    private bool isLoading = true;
+    private string sortColumn = "Name";
+    private string sortDirection = "asc";
+    
+    // Pagination
+    private int currentPage = 1;
+    private int pageSize = 10;
+    private int totalPages = 1;
+    
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        try
+        {
+            isLoading = true;
+            
+            using var dbContext = await DbContextFactory.CreateDbContextAsync();
+            
+            employees = await dbContext.Employees
+                .Include(e => e.Department)
+                .Include(e => e.Company)
+                .OrderBy(e => e.FirstName)
+                .ThenBy(e => e.LastName)
+                .ToListAsync();
+            
+            departments = await dbContext.Departments
+                .Where(d => d.IsActive)
+                .OrderBy(d => d.Name)
+                .ToListAsync();
+            
+            ApplyFiltersAndSort();
+        }
+        catch (Exception ex)
+        {
+            // Log error
+            Console.WriteLine($"Error loading employees: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void ApplyFiltersAndSort()
+    {
+        var query = employees.AsQueryable();
+
+        // Apply search filter
+        if (!string.IsNullOrWhiteSpace(searchTerm))
+        {
+            var search = searchTerm.ToLower().Trim();
+            query = query.Where(e => 
+                (e.FirstName ?? "").ToLower().Contains(search) ||
+                (e.LastName ?? "").ToLower().Contains(search) ||
+                (e.Email ?? "").ToLower().Contains(search) ||
+                (e.EmployeeCode ?? "").ToLower().Contains(search) ||
+                (!string.IsNullOrEmpty(e.JobTitle) && e.JobTitle.ToLower().Contains(search)));
+        }
+
+        // Apply department filter
+        if (selectedDepartmentId.HasValue)
+        {
+            query = query.Where(e => e.DepartmentId == selectedDepartmentId.Value);
+        }
+
+        // Apply status filter
+        if (selectedStatus.HasValue)
+        {
+            query = query.Where(e => e.Status == selectedStatus.Value);
+        }
+
+        // Apply sorting
+        switch (sortColumn.ToLower())
+        {
+            case "name":
+                query = sortDirection == "asc" 
+                    ? query.OrderBy(e => e.FirstName).ThenBy(e => e.LastName)
+                    : query.OrderByDescending(e => e.FirstName).ThenByDescending(e => e.LastName);
+                break;
+            case "employeecode":
+                query = sortDirection == "asc" 
+                    ? query.OrderBy(e => e.EmployeeCode)
+                    : query.OrderByDescending(e => e.EmployeeCode);
+                break;
+            case "status":
+                query = sortDirection == "asc" 
+                    ? query.OrderBy(e => e.Status)
+                    : query.OrderByDescending(e => e.Status);
+                break;
+            default:
+                query = query.OrderBy(e => e.FirstName).ThenBy(e => e.LastName);
+                break;
+        }
+
+        var filtered = query.ToList();
+        
+        // Calculate pagination
+        totalPages = (int)Math.Ceiling((double)filtered.Count / pageSize);
+        currentPage = Math.Min(currentPage, Math.Max(1, totalPages));
+        
+        // Apply pagination
+        filteredEmployees = filtered
+            .Skip((currentPage - 1) * pageSize)
+            .Take(pageSize)
+            .ToList();
+
+        StateHasChanged();
+    }
+
+    private void OnSearchInputChanged(ChangeEventArgs e)
+    {
+        searchTerm = e.Value?.ToString() ?? string.Empty;
+        currentPage = 1;
+        ApplyFiltersAndSort();
+    }
+
+    private void OnSearchChanged()
+    {
+        currentPage = 1;
+        ApplyFiltersAndSort();
+    }
+
+    private void OnFiltersChanged()
+    {
+        currentPage = 1;
+        ApplyFiltersAndSort();
+    }
+
+    private void SortEmployees(string column)
+    {
+        if (sortColumn == column)
+        {
+            sortDirection = sortDirection == "asc" ? "desc" : "asc";
+        }
+        else
+        {
+            sortColumn = column;
+            sortDirection = "asc";
+        }
+        
+        ApplyFiltersAndSort();
+    }
+
+    private void ChangePage(int page)
+    {
+        if (page >= 1 && page <= totalPages)
+        {
+            currentPage = page;
+            ApplyFiltersAndSort();
+        }
+    }
+
+    private void ClearSearch()
+    {
+        searchTerm = string.Empty;
+        OnSearchChanged();
+    }
+
+    private void ResetFilters()
+    {
+        searchTerm = string.Empty;
+        selectedDepartmentId = null;
+        selectedStatus = null;
+        currentPage = 1;
+        sortColumn = "Name";
+        sortDirection = "asc";
+        ApplyFiltersAndSort();
+    }
+
+    private bool HasActiveFilters()
+    {
+        return !string.IsNullOrWhiteSpace(searchTerm) || 
+               selectedDepartmentId.HasValue || 
+               selectedStatus.HasValue;
+    }
+
+    private string GetStatusBadgeClass(EmploymentStatus status)
+    {
+        return status switch
+        {
+            EmploymentStatus.Active => "badge-success",
+            EmploymentStatus.Inactive => "badge-secondary",
+            EmploymentStatus.OnLeave => "badge-warning",
+            EmploymentStatus.Terminated => "badge-danger",
+            _ => "badge-secondary"
+        };
+    }
+
+    private async Task ConfirmDelete(Employee employee)
+    {
+        var confirmed = await JSRuntime.InvokeAsync<bool>("confirm", 
+            $"Are you sure you want to delete employee {employee.FirstName} {employee.LastName}? This action cannot be undone.");
+        
+        if (confirmed)
+        {
+            await DeleteEmployee(employee);
+        }
+    }
+
+    private async Task DeleteEmployee(Employee employee)
+    {
+        try
+        {
+            using var dbContext = await DbContextFactory.CreateDbContextAsync();
+            
+            var employeeToDelete = await dbContext.Employees.FindAsync(employee.Id);
+            if (employeeToDelete != null)
+            {
+                dbContext.Employees.Remove(employeeToDelete);
+                await dbContext.SaveChangesAsync();
+                
+                await LoadData();
+                StateHasChanged();
+            }
+        }
+        catch (Exception ex)
+        {
+            // Handle error - in a real app, show user-friendly message
+            await JSRuntime.InvokeVoidAsync("alert", "Error deleting employee. Please try again.");
+        }
+    }
+}

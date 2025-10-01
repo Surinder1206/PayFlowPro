@@ -1,0 +1,117 @@
+@page "/auth-debug"
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.AspNetCore.Identity
+@using PayFlowPro.Models.Entities
+@using Microsoft.AspNetCore.Components
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject SignInManager<ApplicationUser> SignInManager
+@inject UserManager<ApplicationUser> UserManager
+
+<PageTitle>Authentication Debug</PageTitle>
+
+<h3>Authentication Debug Information</h3>
+
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5>Authentication State Provider</h5>
+                </div>
+                <div class="card-body">
+                    <AuthorizeView>
+                        <Authorized>
+                            <div class="alert alert-success">
+                                <strong>✅ User is Authorized</strong><br/>
+                                Identity Name: @context.User.Identity?.Name<br/>
+                                Is Authenticated: @context.User.Identity?.IsAuthenticated<br/>
+                                Authentication Type: @context.User.Identity?.AuthenticationType
+                            </div>
+
+                            <h6>User Claims:</h6>
+                            <ul>
+                                @foreach (var claim in context.User.Claims)
+                                {
+                                    <li><strong>@claim.Type:</strong> @claim.Value</li>
+                                }
+                            </ul>
+
+                            <h6>User Roles:</h6>
+                            <ul>
+                                @foreach (var role in context.User.Claims.Where(c => c.Type == System.Security.Claims.ClaimTypes.Role))
+                                {
+                                    <li>@role.Value</li>
+                                }
+                            </ul>
+                        </Authorized>
+                        <NotAuthorized>
+                            <div class="alert alert-danger">
+                                <strong>❌ User is NOT Authorized</strong>
+                            </div>
+                        </NotAuthorized>
+                    </AuthorizeView>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5>SignIn Manager Status</h5>
+                </div>
+                <div class="card-body">
+                    <p><strong>Is Signed In:</strong> @(currentUser != null ? SignInManager.IsSignedIn(currentUser) : false)</p>
+                    @if (applicationUser != null)
+                    {
+                        <div class="alert alert-info">
+                            <strong>Current User Details:</strong><br/>
+                            User ID: @applicationUser.Id<br/>
+                            Email: @applicationUser.Email<br/>
+                            Username: @applicationUser.UserName<br/>
+                            First Name: @applicationUser.FirstName<br/>
+                            Last Name: @applicationUser.LastName<br/>
+                            Is Active: @applicationUser.IsActive
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="alert alert-warning">
+                            <strong>No current user found</strong>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mt-3">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5>LoginDisplay Component Test</h5>
+                </div>
+                <div class="card-body">
+                    <div style="background-color: #f8f9fa; padding: 10px; border: 1px solid #dee2e6;">
+                        <LoginDisplay />
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private System.Security.Claims.ClaimsPrincipal? currentUser;
+    private ApplicationUser? applicationUser;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        currentUser = authState.User;
+
+        if (currentUser?.Identity?.IsAuthenticated == true)
+        {
+            applicationUser = await UserManager.GetUserAsync(currentUser);
+        }
+    }
+}

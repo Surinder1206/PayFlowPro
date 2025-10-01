@@ -1,0 +1,442 @@
+@page "/departments"
+@using PayFlowPro.Models.Entities
+@using PayFlowPro.Data.Context
+@using Microsoft.EntityFrameworkCore
+@using Microsoft.AspNetCore.Components.Authorization
+@inject ApplicationDbContext dbContext
+@inject NavigationManager Navigation
+@inject IJSRuntime JSRuntime
+@attribute [Authorize(Roles = "Admin,HR")]
+
+<PageTitle>Departments - PayFlow Pro</PageTitle>
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1 class="h3">
+        <i class="fas fa-building me-2"></i>
+        Departments Management
+    </h1>
+    <AuthorizeView Roles="Admin,HR">
+        <Authorized>
+            <a href="/departments/create" class="btn btn-primary">
+                <i class="fas fa-plus me-1"></i>
+                Add New Department
+            </a>
+        </Authorized>
+    </AuthorizeView>
+</div>
+
+<!-- Search and Filter Section -->
+<div class="card mb-4">
+    <div class="card-body">
+        <div class="row g-3">
+            <div class="col-md-6">
+                <label for="searchTerm" class="form-label">Search Departments</label>
+                <input type="text" class="form-control" id="searchTerm" placeholder="Search by name or code..." @bind="searchTerm" @bind:after="OnFiltersChanged" />
+            </div>
+            <div class="col-md-3">
+                <label for="statusFilter" class="form-label">Status</label>
+                <select class="form-control" id="statusFilter" @bind="statusFilter" @bind:after="OnFiltersChanged">
+                    <option value="">All Statuses</option>
+                    <option value="true">Active</option>
+                    <option value="false">Inactive</option>
+                </select>
+            </div>
+            <div class="col-md-3 d-flex align-items-end">
+                <button type="button" class="btn btn-outline-secondary w-100" @onclick="ClearFilters">
+                    <i class="fas fa-eraser me-1"></i>
+                    Clear Filters
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Statistics Cards -->
+<div class="row mb-4">
+    <div class="col-lg-3 col-md-6 mb-3">
+        <div class="card bg-primary text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <div class="small">Total Departments</div>
+                        <h4 class="mb-0">@totalDepartments</h4>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="fas fa-building fa-2x opacity-75"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-lg-3 col-md-6 mb-3">
+        <div class="card bg-success text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <div class="small">Active Departments</div>
+                        <h4 class="mb-0">@activeDepartments</h4>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="fas fa-check-circle fa-2x opacity-75"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-3 col-md-6 mb-3">
+        <div class="card bg-info text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <div class="small">With Managers</div>
+                        <h4 class="mb-0">@departmentsWithManagers</h4>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="fas fa-user-tie fa-2x opacity-75"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-3 col-md-6 mb-3">
+        <div class="card bg-warning text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <div class="small">Total Employees</div>
+                        <h4 class="mb-0">@totalEmployeesInDepartments</h4>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="fas fa-users fa-2x opacity-75"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Departments Table -->
+<div class="card">
+    <div class="card-header">
+        <div class="d-flex justify-content-between align-items-center">
+            <h5 class="mb-0">
+                <i class="fas fa-list me-2"></i>
+                Departments List (@filteredDepartments.Count)
+            </h5>
+            <div class="d-flex gap-2">
+                <button type="button" class="btn btn-outline-primary btn-sm" @onclick="RefreshData">
+                    <i class="fas fa-sync-alt me-1"></i>
+                    Refresh
+                </button>
+            </div>
+        </div>
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="card-body text-center">
+            <div class="spinner-border" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <p class="mt-2">Loading departments...</p>
+        </div>
+    }
+    else if (!filteredDepartments.Any())
+    {
+        <div class="card-body text-center">
+            <div class="py-5">
+                <i class="fas fa-inbox fa-3x text-muted mb-3"></i>
+                <h5 class="text-muted">No departments found</h5>
+                <p class="text-muted">
+                    @if (string.IsNullOrEmpty(searchTerm) && string.IsNullOrEmpty(statusFilter))
+                    {
+                        <span>Get started by creating your first department.</span>
+                    }
+                    else
+                    {
+                        <span>No departments match your current filters. Try adjusting your search criteria.</span>
+                    }
+                </p>
+                <AuthorizeView Roles="Admin,HR">
+                    <Authorized>
+                        @if (string.IsNullOrEmpty(searchTerm) && string.IsNullOrEmpty(statusFilter))
+                        {
+                            <a href="/departments/create" class="btn btn-primary">
+                                <i class="fas fa-plus me-1"></i>
+                                Create First Department
+                            </a>
+                        }
+                        else
+                        {
+                            <button type="button" class="btn btn-outline-secondary" @onclick="ClearFilters">
+                                <i class="fas fa-eraser me-1"></i>
+                                Clear Filters
+                            </button>
+                        }
+                    </Authorized>
+                </AuthorizeView>
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Department Code</th>
+                        <th>Department Name</th>
+                        <th>Description</th>
+                        <th>Manager</th>
+                        <th>Employees</th>
+                        <th>Status</th>
+                        <th>Created</th>
+                        <th class="text-center">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var department in filteredDepartments)
+                    {
+                        <tr>
+                            <td>
+                                <span class="badge bg-secondary">@department.Code</span>
+                            </td>
+                            <td>
+                                <strong>@department.Name</strong>
+                            </td>
+                            <td>
+                                @if (!string.IsNullOrEmpty(department.Description))
+                                {
+                                    <span class="text-muted">@(department.Description.Length > 50 ? department.Description.Substring(0, 50) + "..." : department.Description)</span>
+                                }
+                                else
+                                {
+                                    <span class="text-muted fst-italic">No description</span>
+                                }
+                            </td>
+                            <td>
+                                @if (department.ManagerEmployeeId.HasValue)
+                                {
+                                    var manager = employees.FirstOrDefault(e => e.Id == department.ManagerEmployeeId.Value);
+                                    if (manager != null)
+                                    {
+                                        <div>
+                                            <strong>@manager.FirstName @manager.LastName</strong>
+                                            <br />
+                                            <small class="text-muted">@manager.EmployeeCode</small>
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-warning">
+                                            <i class="fas fa-exclamation-triangle me-1"></i>
+                                            Manager not found
+                                        </span>
+                                    }
+                                }
+                                else
+                                {
+                                    <span class="text-muted fst-italic">No manager assigned</span>
+                                }
+                            </td>
+                            <td>
+                                @{
+                                    var employeeCount = employees.Count(e => e.DepartmentId == department.Id);
+                                }
+                                <span class="badge bg-info">@employeeCount</span>
+                            </td>
+                            <td>
+                                @if (department.IsActive)
+                                {
+                                    <span class="badge bg-success">
+                                        <i class="fas fa-check me-1"></i>
+                                        Active
+                                    </span>
+                                }
+                                else
+                                {
+                                    <span class="badge bg-danger">
+                                        <i class="fas fa-times me-1"></i>
+                                        Inactive
+                                    </span>
+                                }
+                            </td>
+                            <td>
+                                <small class="text-muted">@department.CreatedAt.ToString("MMM dd, yyyy")</small>
+                            </td>
+                            <td class="text-center">
+                                <div class="btn-group" role="group">
+                                    <a href="/departments/details/@department.Id" class="btn btn-sm btn-outline-info" title="View Details">
+                                        <i class="fas fa-eye"></i>
+                                    </a>
+                                    <AuthorizeView Roles="Admin,HR">
+                                        <Authorized>
+                                            <a href="/departments/edit/@department.Id" class="btn btn-sm btn-outline-primary" title="Edit">
+                                                <i class="fas fa-edit"></i>
+                                            </a>
+                                            @if (employees.Count(e => e.DepartmentId == department.Id) == 0)
+                                            {
+                                                <button type="button" class="btn btn-sm btn-outline-danger" title="Delete" @onclick="() => ConfirmDelete(department)">
+                                                    <i class="fas fa-trash"></i>
+                                                </button>
+                                            }
+                                            else
+                                            {
+                                                <button type="button" class="btn btn-sm btn-outline-secondary" title="Cannot delete - has employees" disabled>
+                                                    <i class="fas fa-trash"></i>
+                                                </button>
+                                            }
+                                        </Authorized>
+                                    </AuthorizeView>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
+
+@code {
+    private List<Department> departments = new();
+    private List<Department> filteredDepartments = new();
+    private List<Employee> employees = new();
+    
+    private string searchTerm = string.Empty;
+    private string statusFilter = string.Empty;
+    private bool isLoading = true;
+    
+    // Statistics
+    private int totalDepartments;
+    private int activeDepartments;
+    private int departmentsWithManagers;
+    private int totalEmployeesInDepartments;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        isLoading = true;
+        StateHasChanged();
+
+        try
+        {
+            // Load departments
+            departments = await dbContext.Departments
+                .OrderBy(d => d.Name)
+                .ToListAsync();
+
+            // Load employees
+            employees = await dbContext.Employees
+                .Include(e => e.Department)
+                .ToListAsync();
+
+            // Calculate statistics
+            CalculateStatistics();
+
+            // Apply filters
+            await OnFiltersChanged();
+        }
+        catch (Exception ex)
+        {
+            // Log error (in production, use proper logging)
+            Console.WriteLine($"Error loading departments: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private void CalculateStatistics()
+    {
+        totalDepartments = departments.Count;
+        activeDepartments = departments.Count(d => d.IsActive);
+        departmentsWithManagers = departments.Count(d => d.ManagerEmployeeId.HasValue);
+        totalEmployeesInDepartments = employees.Count;
+    }
+
+    private Task OnFiltersChanged()
+    {
+        var query = departments.AsEnumerable();
+
+        // Apply search filter
+        if (!string.IsNullOrWhiteSpace(searchTerm))
+        {
+            var search = searchTerm.Trim().ToLowerInvariant();
+            query = query.Where(d =>
+                (d.Name?.ToLowerInvariant().Contains(search) ?? false) ||
+                (d.Code?.ToLowerInvariant().Contains(search) ?? false) ||
+                (d.Description?.ToLowerInvariant().Contains(search) ?? false)
+            );
+        }
+
+        // Apply status filter
+        if (!string.IsNullOrEmpty(statusFilter))
+        {
+            if (bool.TryParse(statusFilter, out bool isActive))
+            {
+                query = query.Where(d => d.IsActive == isActive);
+            }
+        }
+
+        filteredDepartments = query.ToList();
+        StateHasChanged();
+        
+        return Task.CompletedTask;
+    }
+
+    private async Task ClearFilters()
+    {
+        searchTerm = string.Empty;
+        statusFilter = string.Empty;
+        await OnFiltersChanged();
+    }
+
+    private async Task RefreshData()
+    {
+        await LoadData();
+    }
+
+    private async Task ConfirmDelete(Department department)
+    {
+        var employeeCount = employees.Count(e => e.DepartmentId == department.Id);
+        
+        if (employeeCount > 0)
+        {
+            await JSRuntime.InvokeVoidAsync("alert", $"Cannot delete department '{department.Name}' because it has {employeeCount} employee(s) assigned to it. Please reassign or remove employees first.");
+            return;
+        }
+
+        var confirmed = await JSRuntime.InvokeAsync<bool>("confirm", $"Are you sure you want to delete the department '{department.Name}'?\n\nThis action cannot be undone.");
+        
+        if (confirmed)
+        {
+            await DeleteDepartment(department);
+        }
+    }
+
+    private async Task DeleteDepartment(Department department)
+    {
+        try
+        {
+            dbContext.Departments.Remove(department);
+            await dbContext.SaveChangesAsync();
+            
+            await JSRuntime.InvokeVoidAsync("alert", $"Department '{department.Name}' has been deleted successfully.");
+            await LoadData();
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("alert", $"Error deleting department: {ex.Message}");
+        }
+    }
+}

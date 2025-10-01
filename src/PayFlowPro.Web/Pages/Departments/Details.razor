@@ -1,0 +1,479 @@
+@page "/departments/details/{Id:int}"
+@using PayFlowPro.Models.Entities
+@using PayFlowPro.Data.Context
+@using Microsoft.EntityFrameworkCore
+@using Microsoft.AspNetCore.Components.Authorization
+@inject ApplicationDbContext dbContext
+@inject NavigationManager Navigation
+@inject IJSRuntime JSRuntime
+@attribute [Authorize(Roles = "Admin,HR,Manager,Employee")]
+
+<PageTitle>Department Details - PayFlow Pro</PageTitle>
+
+@if (department == null)
+{
+    <div class="text-center py-5">
+        <div class="spinner-border" role="status">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+        <p class="mt-2">Loading department details...</p>
+    </div>
+}
+else
+{
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h3">
+            <i class="fas fa-building me-2"></i>
+            @department.Name
+            @if (!department.IsActive)
+            {
+                <span class="badge bg-danger ms-2">Inactive</span>
+            }
+        </h1>
+        <div class="d-flex gap-2">
+            <AuthorizeView Roles="Admin,HR">
+                <Authorized>
+                    <a href="/departments/edit/@Id" class="btn btn-primary">
+                        <i class="fas fa-edit me-1"></i>
+                        Edit Department
+                    </a>
+                </Authorized>
+            </AuthorizeView>
+            <a href="/departments" class="btn btn-outline-secondary">
+                <i class="fas fa-arrow-left me-1"></i>
+                Back to Departments
+            </a>
+        </div>
+    </div>
+
+    <!-- Department Overview Cards -->
+    <div class="row mb-4">
+        <div class="col-lg-3 col-md-6 mb-3">
+            <div class="card bg-primary text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <div class="small text-white-75">Total Employees</div>
+                            <h3 class="mb-0">@departmentEmployees.Count</h3>
+                        </div>
+                        <div class="align-self-center">
+                            <i class="fas fa-users fa-2x text-white-50"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-lg-3 col-md-6 mb-3">
+            <div class="card bg-success text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <div class="small text-white-75">Active Employees</div>
+                            <h3 class="mb-0">@activeEmployees</h3>
+                        </div>
+                        <div class="align-self-center">
+                            <i class="fas fa-check-circle fa-2x text-white-50"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-3 col-md-6 mb-3">
+            <div class="card bg-info text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <div class="small text-white-75">Avg. Salary</div>
+                            <h3 class="mb-0">@averageSalary.ToString("C0")</h3>
+                        </div>
+                        <div class="align-self-center">
+                            <i class="fas fa-dollar-sign fa-2x text-white-50"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-3 col-md-6 mb-3">
+            <div class="card bg-warning text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <div class="small text-white-75">Job Titles</div>
+                            <h3 class="mb-0">@uniqueJobTitles</h3>
+                        </div>
+                        <div class="align-self-center">
+                            <i class="fas fa-briefcase fa-2x text-white-50"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Department Information -->
+        <div class="col-lg-4 mb-4">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-info-circle me-2"></i>
+                        Department Information
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row mb-3">
+                        <div class="col-4"><strong>Code:</strong></div>
+                        <div class="col-8">
+                            <span class="badge bg-secondary fs-6">@department.Code</span>
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-4"><strong>Name:</strong></div>
+                        <div class="col-8">@department.Name</div>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-4"><strong>Status:</strong></div>
+                        <div class="col-8">
+                            @if (department.IsActive)
+                            {
+                                <span class="badge bg-success">
+                                    <i class="fas fa-check me-1"></i>
+                                    Active
+                                </span>
+                            }
+                            else
+                            {
+                                <span class="badge bg-danger">
+                                    <i class="fas fa-times me-1"></i>
+                                    Inactive
+                                </span>
+                            }
+                        </div>
+                    </div>
+
+                    @if (!string.IsNullOrEmpty(department.Description))
+                    {
+                        <div class="row mb-3">
+                            <div class="col-12">
+                                <strong>Description:</strong>
+                                <p class="text-muted mt-1 mb-0">@department.Description</p>
+                            </div>
+                        </div>
+                    }
+
+                    <div class="row mb-3">
+                        <div class="col-4"><strong>Manager:</strong></div>
+                        <div class="col-8">
+                            @if (manager != null)
+                            {
+                                <div>
+                                    <strong>@manager.FirstName @manager.LastName</strong>
+                                    <br />
+                                    <small class="text-muted">@manager.EmployeeCode • @manager.JobTitle</small>
+                                    <br />
+                                    <small class="text-muted">@manager.Email</small>
+                                </div>
+                            }
+                            else
+                            {
+                                <span class="text-muted fst-italic">No manager assigned</span>
+                            }
+                        </div>
+                    </div>
+
+                    <hr />
+
+                    <div class="row mb-2">
+                        <div class="col-4"><strong>Created:</strong></div>
+                        <div class="col-8">
+                            <small>@department.CreatedAt.ToString("MMM dd, yyyy 'at' HH:mm")</small>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-4"><strong>Updated:</strong></div>
+                        <div class="col-8">
+                            <small>@department.UpdatedAt.ToString("MMM dd, yyyy 'at' HH:mm")</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Employees List -->
+        <div class="col-lg-8 mb-4">
+            <div class="card h-100">
+                <div class="card-header">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h5 class="card-title mb-0">
+                            <i class="fas fa-users me-2"></i>
+                            Department Employees (@departmentEmployees.Count)
+                        </h5>
+                        <AuthorizeView Roles="Admin,HR">
+                            <Authorized>
+                                <a href="/employees/create" class="btn btn-sm btn-outline-primary">
+                                    <i class="fas fa-user-plus me-1"></i>
+                                    Add Employee
+                                </a>
+                            </Authorized>
+                        </AuthorizeView>
+                    </div>
+                </div>
+
+                @if (!departmentEmployees.Any())
+                {
+                    <div class="card-body text-center">
+                        <div class="py-4">
+                            <i class="fas fa-user-slash fa-3x text-muted mb-3"></i>
+                            <h6 class="text-muted">No employees in this department</h6>
+                            <p class="text-muted small">This department currently has no employees assigned to it.</p>
+                        </div>
+                    </div>
+                }
+                else
+                {
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-hover mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Employee</th>
+                                        <th>Job Title</th>
+                                        <th>Email</th>
+                                        <th>Salary</th>
+                                        <th>Status</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var employee in departmentEmployees.OrderBy(e => e.FirstName).ThenBy(e => e.LastName))
+                                    {
+                                        <tr>
+                                            <td>
+                                                <div>
+                                                    <strong>@employee.FirstName @employee.LastName</strong>
+                                                    @if (employee.Id == department.ManagerEmployeeId)
+                                                    {
+                                                        <span class="badge bg-info ms-1">Manager</span>
+                                                    }
+                                                    <br />
+                                                    <small class="text-muted">@employee.EmployeeCode</small>
+                                                </div>
+                                            </td>
+                                            <td>
+                                                @if (!string.IsNullOrEmpty(employee.JobTitle))
+                                                {
+                                                    <span>@employee.JobTitle</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted fst-italic">No title</span>
+                                                }
+                                            </td>
+                                            <td>
+                                                @if (!string.IsNullOrEmpty(employee.Email))
+                                                {
+                                                    <a href="mailto:@employee.Email" class="text-decoration-none">@employee.Email</a>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted fst-italic">No email</span>
+                                                }
+                                            </td>
+                                            <td>
+                                                <span class="fw-bold">@employee.BasicSalary.ToString("C0")</span>
+                                            </td>
+                                            <td>
+                                                @if (employee.Status == Models.Enums.EmploymentStatus.Active)
+                                                {
+                                                    <span class="badge bg-success">Active</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge bg-danger">@employee.Status</span>
+                                                }
+                                            </td>
+                                            <td>
+                                                <div class="btn-group btn-group-sm">
+                                                    <a href="/employees/details/@employee.Id" class="btn btn-outline-info" title="View Details">
+                                                        <i class="fas fa-eye"></i>
+                                                    </a>
+                                                    <AuthorizeView Roles="Admin,HR">
+                                                        <Authorized>
+                                                            <a href="/employees/edit/@employee.Id" class="btn btn-outline-primary" title="Edit">
+                                                                <i class="fas fa-edit"></i>
+                                                            </a>
+                                                        </Authorized>
+                                                    </AuthorizeView>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+
+    <!-- Additional Statistics -->
+    @if (departmentEmployees.Any())
+    {
+        <div class="row">
+            <div class="col-lg-6 mb-4">
+                <div class="card">
+                    <div class="card-header">
+                        <h6 class="card-title mb-0">
+                            <i class="fas fa-chart-pie me-2"></i>
+                            Job Title Distribution
+                        </h6>
+                    </div>
+                    <div class="card-body">
+                        @foreach (var jobTitleGroup in jobTitleStats)
+                        {
+                            var percentage = (double)jobTitleGroup.Count / departmentEmployees.Count * 100;
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <span>@(string.IsNullOrEmpty(jobTitleGroup.JobTitle) ? "No Title" : jobTitleGroup.JobTitle)</span>
+                                <span class="badge bg-primary">@jobTitleGroup.Count (@percentage.ToString("F0")%)</span>
+                            </div>
+                            <div class="progress mb-3" style="height: 6px;">
+                                <div class="progress-bar" role="progressbar" style="width: @percentage%" aria-valuenow="@percentage" aria-valuemin="0" aria-valuemax="100"></div>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-6 mb-4">
+                <div class="card">
+                    <div class="card-header">
+                        <h6 class="card-title mb-0">
+                            <i class="fas fa-calendar-alt me-2"></i>
+                            Recent Joiners
+                        </h6>
+                    </div>
+                    <div class="card-body">
+                        @if (recentJoiners.Any())
+                        {
+                            @foreach (var employee in recentJoiners)
+                            {
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <div>
+                                        <strong>@employee.FirstName @employee.LastName</strong>
+                                        <br />
+                                        <small class="text-muted">@employee.JobTitle</small>
+                                    </div>
+                                    <div class="text-end">
+                                        <small class="text-muted">@employee.DateOfJoining.ToString("MMM dd, yyyy")</small>
+                                    </div>
+                                </div>
+                                @if (employee != recentJoiners.Last())
+                                {
+                                    <hr class="my-2" />
+                                }
+                            }
+                        }
+                        else
+                        {
+                            <p class="text-muted mb-0">No recent joiners in the last 6 months.</p>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+}
+
+@code {
+    [Parameter] public int Id { get; set; }
+
+    private Department? department;
+    private Employee? manager;
+    private List<Employee> departmentEmployees = new();
+    
+    // Statistics
+    private int activeEmployees;
+    private decimal averageSalary;
+    private int uniqueJobTitles;
+    private List<(string JobTitle, int Count)> jobTitleStats = new();
+    private List<Employee> recentJoiners = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        try
+        {
+            // Load the department
+            department = await dbContext.Departments
+                .FirstOrDefaultAsync(d => d.Id == Id);
+
+            if (department == null)
+            {
+                await JSRuntime.InvokeVoidAsync("alert", "Department not found.");
+                Navigation.NavigateTo("/departments");
+                return;
+            }
+
+            // Load department manager
+            if (department.ManagerEmployeeId.HasValue)
+            {
+                manager = await dbContext.Employees
+                    .FirstOrDefaultAsync(e => e.Id == department.ManagerEmployeeId.Value);
+            }
+
+            // Load department employees
+            departmentEmployees = await dbContext.Employees
+                .Where(e => e.DepartmentId == Id)
+                .ToListAsync();
+
+            // Calculate statistics
+            CalculateStatistics();
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("alert", $"Error loading department details: {ex.Message}");
+        }
+    }
+
+    private void CalculateStatistics()
+    {
+        if (!departmentEmployees.Any())
+        {
+            activeEmployees = 0;
+            averageSalary = 0;
+            uniqueJobTitles = 0;
+            return;
+        }
+
+        activeEmployees = departmentEmployees.Count(e => e.Status == Models.Enums.EmploymentStatus.Active);
+        averageSalary = departmentEmployees.Average(e => e.BasicSalary);
+        
+        // Job title statistics
+        jobTitleStats = departmentEmployees
+            .GroupBy(e => e.JobTitle ?? "No Title")
+            .Select(g => (g.Key, g.Count()))
+            .OrderByDescending(x => x.Item2)
+            .ToList();
+        
+        uniqueJobTitles = jobTitleStats.Count;
+
+        // Recent joiners (last 6 months)
+        var sixMonthsAgo = DateTime.UtcNow.AddMonths(-6);
+        recentJoiners = departmentEmployees
+            .Where(e => e.DateOfJoining >= sixMonthsAgo)
+            .OrderByDescending(e => e.DateOfJoining)
+            .Take(5)
+            .ToList();
+    }
+}

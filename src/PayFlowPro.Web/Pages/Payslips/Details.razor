@@ -1,0 +1,515 @@
+@page "/payslips/{PayslipId:int}"
+@using PayFlowPro.Models.Entities
+@using PayFlowPro.Models.Enums
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Identity
+@using Microsoft.EntityFrameworkCore
+@using PayFlowPro.Data.Context
+@using System.Security.Claims
+@inject IDbContextFactory<ApplicationDbContext> DbContextFactory
+@inject UserManager<ApplicationUser> UserManager
+@inject IJSRuntime JSRuntime
+@inject NavigationManager Navigation
+@inject IHttpContextAccessor HttpContextAccessor
+@inject ILogger<Details> Logger
+@attribute [Authorize]
+
+<div class="container-fluid">
+    @if (!isAuthorized)
+    {
+        <div class="alert alert-danger">
+            <i class="fas fa-exclamation-triangle me-2"></i>
+            You are not authorized to view this payslip.
+        </div>
+    }
+    else if (isLoading)
+    {
+        <div class="text-center p-4">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <p class="mt-2">Loading payslip details...</p>
+        </div>
+    }
+    else if (payslip == null)
+    {
+        <div class="alert alert-warning">
+            <i class="fas fa-exclamation-triangle me-2"></i>
+            Payslip not found or you don't have permission to view it.
+        </div>
+    }
+    else
+    {
+        <div class="row">
+            <div class="col-12">
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <nav aria-label="breadcrumb">
+                        <ol class="breadcrumb">
+                            @if (currentUserRole == "Employee")
+                            {
+                                <li class="breadcrumb-item"><a href="/payslips/my">My Payslips</a></li>
+                            }
+                            else
+                            {
+                                <li class="breadcrumb-item"><a href="/payslips">Payslips</a></li>
+                            }
+                            <li class="breadcrumb-item active">@payslip.PayslipNumber</li>
+                        </ol>
+                    </nav>
+                    <div class="btn-group">
+                        @* HR/Admin specific actions *@
+                        @if (currentUserRole == "Admin" || currentUserRole == "HR")
+                        {
+                            @if (payslip.Status == PayslipStatus.Generated)
+                            {
+                                <button class="btn btn-success" @onclick="ApprovePayslip">
+                                    <i class="fas fa-check me-1"></i>Approve
+                                </button>
+                            }
+                            @if (payslip.Status == PayslipStatus.Approved)
+                            {
+                                <button class="btn btn-info" @onclick="SendPayslip">
+                                    <i class="fas fa-paper-plane me-1"></i>Send
+                                </button>
+                            }
+                        }
+                        
+                        @* Actions available to all users *@
+                        <button class="btn btn-outline-secondary" @onclick="PreviewPayslip">
+                            <i class="fas fa-eye me-1"></i>Preview PDF
+                        </button>
+                        <button class="btn btn-primary" @onclick="DownloadPayslip">
+                            <i class="fas fa-download me-1"></i>Download PDF
+                        </button>
+                        <button class="btn btn-outline-primary" @onclick="PrintPayslip">
+                            <i class="fas fa-print me-1"></i>Print
+                        </button>
+                    </div>
+                </div>
+
+                @* Payslip Card *@
+                <div class="card">
+                    <div class="card-header bg-primary text-white">
+                        <div class="row align-items-center">
+                            <div class="col-md-8">
+                                <h4 class="card-title mb-0">
+                                    <i class="fas fa-money-check-alt me-2"></i>
+                                    Payslip: @payslip.PayslipNumber
+                                </h4>
+                            </div>
+                            <div class="col-md-4 text-end">
+                                <span class="badge @GetStatusBadgeClass(payslip.Status) fs-6">
+                                    @payslip.Status
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card-body" id="payslipContent">
+                        @* Company & Employee Header *@
+                        <div class="row mb-4">
+                            <div class="col-md-6">
+                                <h5 class="text-primary">@payslip.Employee.Company?.Name</h5>
+                                <p class="mb-1">@payslip.Employee.Company?.Address</p>
+                                <p class="mb-1">Email: @payslip.Employee.Company?.Email</p>
+                                <p class="mb-0">Phone: @payslip.Employee.Company?.PhoneNumber</p>
+                            </div>
+                            <div class="col-md-6 text-end">
+                                <h6 class="text-muted">SALARY SLIP</h6>
+                                <p class="mb-1"><strong>Pay Period:</strong> @payslip.PayPeriodStart.ToString("MMM dd") - @payslip.PayPeriodEnd.ToString("MMM dd, yyyy")</p>
+                                <p class="mb-1"><strong>Pay Date:</strong> @payslip.PayDate.ToString("MMM dd, yyyy")</p>
+                                <p class="mb-0"><strong>Generated:</strong> @payslip.CreatedAt.ToString("MMM dd, yyyy")</p>
+                            </div>
+                        </div>
+
+                        <hr />
+
+                        @* Employee Information *@
+                        <div class="row mb-4">
+                            <div class="col-md-6">
+                                <h6 class="text-primary mb-3">Employee Information</h6>
+                                <table class="table table-borderless table-sm">
+                                    <tr>
+                                        <td width="40%"><strong>Name:</strong></td>
+                                        <td>@payslip.Employee.FirstName @payslip.Employee.LastName</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Employee ID:</strong></td>
+                                        <td>@payslip.Employee.EmployeeCode</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Department:</strong></td>
+                                        <td>@payslip.Employee.Department?.Name</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Designation:</strong></td>
+                                        <td>@payslip.Employee.JobTitle</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Date of Joining:</strong></td>
+                                        <td>@payslip.Employee.DateOfJoining.ToString("MMM dd, yyyy")</td>
+                                    </tr>
+                                </table>
+                            </div>
+                            <div class="col-md-6">
+                                <h6 class="text-primary mb-3">Pay Information</h6>
+                                <table class="table table-borderless table-sm">
+                                    <tr>
+                                        <td width="40%"><strong>Working Days:</strong></td>
+                                        <td>@payslip.WorkingDays</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Days Worked:</strong></td>
+                                        <td>@payslip.ActualWorkingDays</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Bank Account:</strong></td>
+                                        <td>@payslip.Employee.BankAccountNumber</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Bank Name:</strong></td>
+                                        <td>@payslip.Employee.BankName</td>
+                                    </tr>
+                                </table>
+                            </div>
+                        </div>
+
+                        <hr />
+
+                        @* Salary Breakdown *@
+                        <div class="row">
+                            <div class="col-md-6">
+                                <h6 class="text-success mb-3">Earnings</h6>
+                                <table class="table table-bordered table-sm">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>Description</th>
+                                            <th width="30%" class="text-end">Amount (₹)</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td><strong>Basic Salary</strong></td>
+                                            <td class="text-end"><strong>@payslip.BasicSalary.ToString("N0")</strong></td>
+                                        </tr>
+                                        @if (payslip.PayslipAllowances?.Any() == true)
+                                        {
+                                            @foreach (var allowance in payslip.PayslipAllowances)
+                                            {
+                                                <tr>
+                                                    <td>@allowance.AllowanceType?.Name</td>
+                                                    <td class="text-end">@allowance.Amount.ToString("N0")</td>
+                                                </tr>
+                                            }
+                                        }
+                                        <tr class="table-success">
+                                            <td><strong>Total Earnings</strong></td>
+                                            <td class="text-end"><strong>@(payslip.BasicSalary + payslip.TotalAllowances).ToString("N0")</strong></td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div class="col-md-6">
+                                <h6 class="text-danger mb-3">Deductions</h6>
+                                <table class="table table-bordered table-sm">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>Description</th>
+                                            <th width="30%" class="text-end">Amount (₹)</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @if (payslip.PayslipDeductions?.Any() == true)
+                                        {
+                                            @foreach (var deduction in payslip.PayslipDeductions)
+                                            {
+                                                <tr>
+                                                    <td>@deduction.DeductionType?.Name</td>
+                                                    <td class="text-end">@deduction.Amount.ToString("N0")</td>
+                                                </tr>
+                                            }
+                                        }
+                                        @if (payslip.TaxAmount > 0)
+                                        {
+                                            <tr>
+                                                <td>Income Tax</td>
+                                                <td class="text-end">@payslip.TaxAmount.ToString("N0")</td>
+                                            </tr>
+                                        }
+                                        <tr class="table-danger">
+                                            <td><strong>Total Deductions</strong></td>
+                                            <td class="text-end"><strong>@(payslip.TotalDeductions + payslip.TaxAmount).ToString("N0")</strong></td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <hr />
+
+                        @* Net Salary *@
+                        <div class="row">
+                            <div class="col-12">
+                                <div class="card bg-primary text-white">
+                                    <div class="card-body text-center">
+                                        <h5 class="card-title mb-1">Net Salary</h5>
+                                        <h2 class="card-text">₹@payslip.NetSalary.ToString("N0")</h2>
+                                        <small>In words: @ConvertToWords(payslip.NetSalary)</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        @if (!string.IsNullOrEmpty(payslip.Notes))
+                        {
+                            <hr />
+                            <div class="row">
+                                <div class="col-12">
+                                    <h6 class="text-primary">Notes</h6>
+                                    <p class="mb-0">@payslip.Notes</p>
+                                </div>
+                            </div>
+                        }
+
+                        @* Approval Information *@
+                        @if (payslip.Status == PayslipStatus.Approved || payslip.Status == PayslipStatus.Sent || payslip.Status == PayslipStatus.Paid)
+                        {
+                            <hr />
+                            <div class="row">
+                                <div class="col-12">
+                                    <small class="text-muted">
+                                        Approved by: @payslip.ApprovedBy on @payslip.ApprovedAt?.ToString("MMM dd, yyyy HH:mm")
+                                    </small>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public int PayslipId { get; set; }
+
+    private Payslip? payslip;
+    private bool isLoading = true;
+    private bool isAuthorized = false;
+    private string? currentUserRole;
+    private string? currentUserId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CheckAuthorization();
+        if (isAuthorized)
+        {
+            await LoadPayslip();
+        }
+    }
+
+    private async Task CheckAuthorization()
+    {
+        try
+        {
+            var httpContext = HttpContextAccessor?.HttpContext;
+            if (httpContext?.User?.Identity?.IsAuthenticated != true)
+            {
+                Navigation.NavigateTo("/Identity/Account/Login");
+                return;
+            }
+
+            var user = await UserManager.GetUserAsync(httpContext.User);
+            if (user == null)
+            {
+                Navigation.NavigateTo("/Identity/Account/Login");
+                return;
+            }
+
+            currentUserId = user.Id;
+            var roles = await UserManager.GetRolesAsync(user);
+            currentUserRole = roles.FirstOrDefault();
+
+            // HR/Admin can view all payslips
+            if (roles.Contains("Admin") || roles.Contains("HR"))
+            {
+                isAuthorized = true;
+                return;
+            }
+
+            // Employees can view only their own payslips - check this now
+            if (roles.Contains("Employee"))
+            {
+                using var context = DbContextFactory.CreateDbContext();
+                
+                // First, check if the payslip exists
+                var payslip = await context.Payslips
+                    .Include(p => p.Employee)
+                    .Where(p => p.Id == PayslipId)
+                    .FirstOrDefaultAsync();
+                
+                if (payslip == null)
+                {
+                    Logger.LogWarning($"Payslip {PayslipId} not found during authorization check");
+                    isAuthorized = false;
+                    return;
+                }
+                
+                // Check if this payslip belongs to the current user
+                bool belongsToUser = payslip.Employee.UserId == currentUserId || payslip.Employee.Email == user.Email;
+                
+                Logger.LogInformation($"Payslip {PayslipId} authorization check - Employee UserId: {payslip.Employee.UserId}, Current UserId: {currentUserId}, Employee Email: {payslip.Employee.Email}, User Email: {user.Email}, Belongs to user: {belongsToUser}");
+                
+                isAuthorized = belongsToUser;
+                return;
+            }
+
+            isAuthorized = false;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error checking authorization for payslip {PayslipId}", PayslipId);
+            isAuthorized = false;
+        }
+    }
+
+    private async Task LoadPayslip()
+    {
+        isLoading = true;
+        StateHasChanged();
+
+        try
+        {
+            using var context = DbContextFactory.CreateDbContext();
+            
+            var query = context.Payslips
+                .Include(p => p.Employee)
+                    .ThenInclude(e => e.Department)
+                .Include(p => p.Employee)
+                    .ThenInclude(e => e.Company)
+                .Include(p => p.PayslipAllowances)
+                    .ThenInclude(pa => pa.AllowanceType)
+                .Include(p => p.PayslipDeductions)
+                    .ThenInclude(pd => pd.DeductionType)
+                .Where(p => p.Id == PayslipId);
+
+            // If user is an employee, restrict to their own payslips
+            if (currentUserRole == "Employee")
+            {
+                var httpContext = HttpContextAccessor?.HttpContext;
+                var user = await UserManager.GetUserAsync(httpContext!.User);
+                var userEmail = user?.Email;
+                
+                // Match by either UserId or Email to handle cases where UserId might be null
+                query = query.Where(p => p.Employee.UserId == currentUserId || p.Employee.Email == userEmail);
+            }
+
+            payslip = await query.FirstOrDefaultAsync();
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("alert", $"Error loading payslip: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task ApprovePayslip()
+    {
+        try
+        {
+            using var context = DbContextFactory.CreateDbContext();
+            var payslipToUpdate = await context.Payslips.FindAsync(PayslipId);
+            
+            if (payslipToUpdate != null)
+            {
+                payslipToUpdate.Status = PayslipStatus.Approved;
+                payslipToUpdate.ApprovedAt = DateTime.UtcNow;
+                payslipToUpdate.ApprovedBy = "Current User"; // TODO: Get actual user
+                
+                await context.SaveChangesAsync();
+                await JSRuntime.InvokeVoidAsync("alert", "Payslip approved successfully!");
+                await LoadPayslip();
+            }
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("alert", $"Error approving payslip: {ex.Message}");
+        }
+    }
+
+    private async Task SendPayslip()
+    {
+        try
+        {
+            using var context = DbContextFactory.CreateDbContext();
+            var payslipToUpdate = await context.Payslips.FindAsync(PayslipId);
+            
+            if (payslipToUpdate != null)
+            {
+                payslipToUpdate.Status = PayslipStatus.Sent;
+                payslipToUpdate.EmailSentAt = DateTime.UtcNow;
+                
+                await context.SaveChangesAsync();
+                await JSRuntime.InvokeVoidAsync("alert", "Payslip sent successfully!");
+                await LoadPayslip();
+            }
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("alert", $"Error sending payslip: {ex.Message}");
+        }
+    }
+
+    private async Task DownloadPayslip()
+    {
+        try
+        {
+            var url = $"/api/pdf/payslip/{PayslipId}";
+            await JSRuntime.InvokeVoidAsync("downloadFile", url);
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("alert", $"Error downloading PDF: {ex.Message}");
+        }
+    }
+
+    private async Task PreviewPayslip()
+    {
+        try
+        {
+            var url = $"/api/pdf/payslip/{PayslipId}/preview";
+            await JSRuntime.InvokeVoidAsync("window.open", url, "_blank");
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("alert", $"Error previewing PDF: {ex.Message}");
+        }
+    }
+
+    private async Task PrintPayslip()
+    {
+        await JSRuntime.InvokeVoidAsync("window.print");
+    }
+
+    private string GetStatusBadgeClass(PayslipStatus status)
+    {
+        return status switch
+        {
+            PayslipStatus.Draft => "bg-secondary",
+            PayslipStatus.Generated => "bg-warning text-dark",
+            PayslipStatus.Approved => "bg-success",
+            PayslipStatus.Sent => "bg-info",
+            PayslipStatus.Paid => "bg-primary",
+            _ => "bg-secondary"
+        };
+    }
+
+    private string ConvertToWords(decimal amount)
+    {
+        // Simple implementation - in real app, use a proper number-to-words converter
+        return $"{amount:N0} Rupees Only";
+    }
+}

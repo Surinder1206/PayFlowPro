@@ -1,0 +1,122 @@
+@page "/Admin/Users"
+@using Microsoft.AspNetCore.Identity
+@using PayFlowPro.Models.Entities
+@using Microsoft.AspNetCore.Components
+@inject UserManager<ApplicationUser> UserManager
+@inject RoleManager<IdentityRole> RoleManager
+@attribute [Authorize(Roles = "Admin")]
+
+<h3>User Management - Debug Information</h3>
+
+@if (users == null)
+{
+    <p><em>Loading...</em></p>
+}
+else
+{
+    <div class="card">
+        <div class="card-header">
+            <h4>All Users in Database (@users.Count users)</h4>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>Email</th>
+                            <th>First Name</th>
+                            <th>Last Name</th>
+                            <th>Email Confirmed</th>
+                            <th>Is Active</th>
+                            <th>Roles</th>
+                            <th>Lockout Enabled</th>
+                            <th>Access Failed Count</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var user in users)
+                        {
+                            <tr>
+                                <td>@user.Email</td>
+                                <td>@user.FirstName</td>
+                                <td>@user.LastName</td>
+                                <td>
+                                    @if (user.EmailConfirmed)
+                                    {
+                                        <span class="badge bg-success">✓</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-warning">✗</span>
+                                    }
+                                </td>
+                                <td>
+                                    @if (user.IsActive)
+                                    {
+                                        <span class="badge bg-success">Active</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-secondary">Inactive</span>
+                                    }
+                                </td>
+                                <td>
+                                    @if (userRoles.ContainsKey(user.Id))
+                                    {
+                                        @string.Join(", ", userRoles[user.Id])
+                                    }
+                                </td>
+                                <td>@user.LockoutEnabled</td>
+                                <td>@user.AccessFailedCount</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    
+    <div class="card mt-4">
+        <div class="card-header">
+            <h4>Available Roles (@roles.Count roles)</h4>
+        </div>
+        <div class="card-body">
+            <ul class="list-group">
+                @foreach (var role in roles)
+                {
+                    <li class="list-group-item">
+                        <strong>@role.Name</strong> - @role.Id
+                    </li>
+                }
+            </ul>
+        </div>
+    </div>
+
+    <div class="alert alert-info mt-4">
+        <h5>Test Login Credentials:</h5>
+        <ul>
+            <li><strong>Admin:</strong> admin@democompany.com / Admin@123</li>
+            <li><strong>HR:</strong> hr@democompany.com / Hr@123</li>
+            <li><strong>Employee:</strong> john.doe@democompany.com / Employee@123</li>
+        </ul>
+    </div>
+}
+
+@code {
+    private List<ApplicationUser> users = new();
+    private List<IdentityRole> roles = new();
+    private Dictionary<string, List<string>> userRoles = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        users = UserManager.Users.ToList();
+        roles = RoleManager.Roles.ToList();
+        
+        // Get roles for each user
+        foreach (var user in users)
+        {
+            var userRolesList = await UserManager.GetRolesAsync(user);
+            userRoles[user.Id] = userRolesList.ToList();
+        }
+    }
+}

@@ -1,0 +1,182 @@
+<div class="top-row ps-3 navbar navbar-dark">
+    <div class="container-fluid">
+        <a class="navbar-brand" href="">
+            <span class="oi oi-document"></span> PayFlow Pro
+        </a>
+        <button title="Navigation menu" class="navbar-toggler" @onclick="ToggleNavMenu">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+    </div>
+</div>
+
+<div class="@NavMenuCssClass nav-scrollable" @onclick="ToggleNavMenu">
+    <nav class="flex-column">
+        <AuthorizeView>
+            <Authorized>
+                <div class="nav-item px-3">
+                    <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
+                        <span class="oi oi-home" aria-hidden="true"></span> Dashboard
+                    </NavLink>
+                </div>
+
+                <AuthorizeView Roles="Admin,HR,Manager" Context="employeeContext">
+                    <Authorized>
+                        <div class="nav-item px-3">
+                            <NavLink class="nav-link" href="employees">
+                                <span class="oi oi-people" aria-hidden="true"></span> Employees
+                            </NavLink>
+                        </div>
+                    </Authorized>
+                </AuthorizeView>
+
+                <AuthorizeView Policy="HROnly" Context="hrContext">
+                    <Authorized>
+                        <div class="nav-item px-3">
+                            <NavLink class="nav-link" href="departments">
+                                <span class="oi oi-organization" aria-hidden="true"></span> Departments
+                            </NavLink>
+                        </div>
+                    </Authorized>
+                </AuthorizeView>
+
+                <AuthorizeView Roles="Admin,HR,Manager" Context="payslipManagerContext">
+                    <Authorized>
+                        <div class="nav-item px-3">
+                            <NavLink class="nav-link" href="payslips">
+                                <span class="oi oi-document" aria-hidden="true"></span> Payslips
+                            </NavLink>
+                        </div>
+                    </Authorized>
+                </AuthorizeView>
+
+                <AuthorizeView Roles="Admin,HR" Context="approvalContext">
+                    <Authorized>
+                        <div class="nav-item px-3">
+                            <NavLink class="nav-link" href="payslips/approval">
+                                <span class="oi oi-task" aria-hidden="true"></span> Payslip Approval
+                            </NavLink>
+                        </div>
+                    </Authorized>
+                </AuthorizeView>
+
+                <AuthorizeView Roles="Employee" Context="employeePayslipContext">
+                    <Authorized>
+                        <div class="nav-item px-3">
+                            <NavLink class="nav-link" href="payslips/my">
+                                <span class="oi oi-document" aria-hidden="true"></span> My Payslips
+                            </NavLink>
+                        </div>
+                    </Authorized>
+                </AuthorizeView>
+
+                <!-- Employee Self-Service Portal -->
+                <AuthorizeView Roles="Employee" Context="selfServiceContext">
+                    <Authorized>
+                        <div class="nav-item px-3">
+                            <NavLink class="nav-link" href="self-service">
+                                <span class="oi oi-person" aria-hidden="true"></span> Self-Service Portal
+                            </NavLink>
+                        </div>
+                        
+                        <div class="nav-item px-3">
+                            <NavLink class="nav-link" href="profile">
+                                <span class="oi oi-pencil" aria-hidden="true"></span> My Profile
+                            </NavLink>
+                        </div>
+                    </Authorized>
+                </AuthorizeView>
+
+                <!-- Leave Management Section -->
+                <div class="nav-item px-3">
+                    <NavLink class="nav-link" href="leave/dashboard">
+                        <span class="oi oi-dashboard" aria-hidden="true"></span> Leave Dashboard
+                    </NavLink>
+                </div>
+
+                <div class="nav-item px-3">
+                    <NavLink class="nav-link" href="leave/request/new">
+                        <span class="oi oi-plus" aria-hidden="true"></span> New Leave Request
+                    </NavLink>
+                </div>
+
+                <div class="nav-item px-3">
+                    <NavLink class="nav-link" href="leave/history">
+                        <span class="oi oi-clock" aria-hidden="true"></span> Leave History
+                    </NavLink>
+                </div>
+
+                <div class="nav-item px-3">
+                    <NavLink class="nav-link" href="leave/calendar">
+                        <span class="oi oi-calendar" aria-hidden="true"></span> Leave Calendar
+                    </NavLink>
+                </div>
+
+                <AuthorizeView Roles="Admin,HR,Manager" Context="leaveApprovalContext">
+                    <Authorized>
+                        <div class="nav-item px-3">
+                            <NavLink class="nav-link" href="leave/approval">
+                                <span class="oi oi-task" aria-hidden="true"></span> Leave Approval
+                            </NavLink>
+                        </div>
+                    </Authorized>
+                </AuthorizeView>
+
+                <AuthorizeView Roles="Admin,HR" Context="autoApprovalContext">
+                    <Authorized>
+                        <div class="nav-item px-3">
+                            <NavLink class="nav-link" href="leave/auto-approval-rules">
+                                <span class="oi oi-cog" aria-hidden="true"></span> Auto-Approval Rules
+                            </NavLink>
+                        </div>
+                    </Authorized>
+                </AuthorizeView>
+
+                <AuthorizeView Policy="HROnly" Context="hrReportsContext">
+                    <Authorized>
+                        <div class="nav-item px-3">
+                            <NavLink class="nav-link" href="reports">
+                                <span class="oi oi-bar-chart" aria-hidden="true"></span> Reports
+                            </NavLink>
+                        </div>
+                    </Authorized>
+                </AuthorizeView>
+
+                <AuthorizeView Policy="AdminOnly" Context="auditContext">
+                    <Authorized>
+                        <div class="nav-item px-3">
+                            <NavLink class="nav-link" href="audit/logs">
+                                <span class="oi oi-shield" aria-hidden="true"></span> Audit Logs
+                            </NavLink>
+                        </div>
+                        <div class="nav-item px-3">
+                            <NavLink class="nav-link" href="audit/test">
+                                <span class="oi oi-beaker" aria-hidden="true"></span> Audit Testing
+                            </NavLink>
+                        </div>
+                    </Authorized>
+                </AuthorizeView>
+
+                <AuthorizeView Policy="AdminOnly" Context="adminContext">
+                    <Authorized>
+                        <div class="nav-item px-3">
+                            <NavLink class="nav-link" href="settings">
+                                <span class="oi oi-cog" aria-hidden="true"></span> Settings
+                            </NavLink>
+                        </div>
+                    </Authorized>
+                </AuthorizeView>
+            </Authorized>
+        </AuthorizeView>
+    </nav>
+</div>
+
+@code {
+    private bool collapseNavMenu = true;
+
+    private string? NavMenuCssClass => collapseNavMenu ? "collapse" : null;
+
+    private void ToggleNavMenu()
+    {
+        collapseNavMenu = !collapseNavMenu;
+    }
+}

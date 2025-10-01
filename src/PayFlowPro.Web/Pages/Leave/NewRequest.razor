@@ -1,0 +1,515 @@
+@page "/leave/request/new"
+@using PayFlowPro.Models.DTOs.Leave
+@using PayFlowPro.Core.Services
+@using PayFlowPro.Shared.DTOs
+@using System
+@inject ILeaveManagementService LeaveService
+@inject IJSRuntime JS
+@inject NavigationManager Navigation
+@inject AuthenticationStateProvider AuthStateProvider
+@inject IEmployeeIdentityService EmployeeIdentityService
+@attribute [Authorize]
+
+<div class="container py-4">
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-primary text-white">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h4 class="mb-0">
+                            <i class="fas fa-plus-circle me-2"></i>
+                            New Leave Request
+                        </h4>
+                        <a href="/leave/dashboard" class="btn btn-light btn-sm">
+                            <i class="fas fa-arrow-left me-1"></i>
+                            Back to Dashboard
+                        </a>
+                    </div>
+                </div>
+
+                <div class="card-body">
+                    @if (!string.IsNullOrEmpty(errorMessage))
+                    {
+                        <div class="alert alert-danger">
+                            <i class="fas fa-exclamation-circle me-2"></i>
+                            @errorMessage
+                        </div>
+                    }
+
+                    @if (availableLeaveTypes?.Any() == true)
+                    {
+                        <EditForm Model="leaveRequest" OnValidSubmit="SubmitRequest">
+                            <DataAnnotationsValidator />
+
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label">Leave Type <span class="text-danger">*</span></label>
+                                    <InputSelect class="form-select" @bind-Value="leaveRequest.LeaveTypeId" @bind-Value:after="OnLeaveTypeChangedWrapper">
+                                        <option value="">Select leave type...</option>
+                                        @foreach (var leaveType in availableLeaveTypes)
+                                        {
+                                            <option value="@leaveType.Id">
+                                                @leaveType.Name (@leaveType.Code) - @leaveType.AvailableDays.ToString("F1") days available
+                                            </option>
+                                        }
+                                    </InputSelect>
+                                    <ValidationMessage For="@(() => leaveRequest.LeaveTypeId)" class="text-danger" />
+                                </div>
+
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label">Request Type</label>
+                                    <InputSelect class="form-select" @bind-Value="IsHalfDayString">
+                                        <option value="false">Full Day</option>
+                                        <option value="true">Half Day</option>
+                                    </InputSelect>
+                                </div>
+                            </div>
+
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label">Start Date <span class="text-danger">*</span></label>
+                                    <InputDate class="form-control" @bind-Value="leaveRequest.StartDate" @bind-Value:after="CalculateDaysWrapper" />
+                                    <ValidationMessage For="@(() => leaveRequest.StartDate)" class="text-danger" />
+                                </div>
+
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label">End Date <span class="text-danger">*</span></label>
+                                    <InputDate class="form-control" @bind-Value="leaveRequest.EndDate" @bind-Value:after="CalculateDaysWrapper"
+                                              disabled="@leaveRequest.IsHalfDay" />
+                                    <ValidationMessage For="@(() => leaveRequest.EndDate)" class="text-danger" />
+                                </div>
+                            </div>
+
+                            @if (leaveRequest.IsHalfDay)
+                            {
+                                <div class="row">
+                                    <div class="col-md-6 mb-3">
+                                        <label class="form-label">Half Day Session</label>
+                                        <InputSelect class="form-select" @bind-Value="leaveRequest.HalfDaySession">
+                                            <option value="Morning">Morning (First Half)</option>
+                                            <option value="Evening">Evening (Second Half)</option>
+                                        </InputSelect>
+                                    </div>
+                                </div>
+                            }
+
+                            @if (calculatedDays > 0)
+                            {
+                                <div class="row mb-3">
+                                    <div class="col-12">
+                                        <div class="alert alert-info">
+                                            <i class="fas fa-info-circle me-2"></i>
+                                            <strong>Duration:</strong> @calculatedDays.ToString("F1") day(s)
+                                            @if (selectedLeaveType != null)
+                                            {
+                                                <text><br /></text>
+                                                <div>
+                                                    <strong>Available Balance:</strong> 
+                                                    @selectedLeaveType.AvailableDays.ToString("F1") days
+                                                </div>
+                                                @if (calculatedDays > selectedLeaveType.AvailableDays)
+                                                {
+                                                    <div class="text-danger">
+                                                        <i class="fas fa-exclamation-triangle me-1"></i>
+                                                        Insufficient balance! You need @(Math.Round(calculatedDays - selectedLeaveType.AvailableDays, 1)) additional days.
+                                                    </div>
+                                                }
+                                            }
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+
+                            <div class="mb-3">
+                                <label class="form-label">Reason <span class="text-danger">*</span></label>
+                                <textarea class="form-control" @bind="leaveRequest.Reason" rows="3" 
+                                          placeholder="Please provide a reason for your leave request..."></textarea>
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label">Additional Comments</label>
+                                <textarea class="form-control" @bind="leaveRequest.Comments" rows="2" 
+                                          placeholder="Any additional information or special instructions..."></textarea>
+                            </div>
+
+                            @if (!string.IsNullOrEmpty(overlapWarning))
+                            {
+                                <div class="mb-3">
+                                    <div class="alert alert-danger">
+                                        <i class="fas fa-exclamation-triangle me-2"></i>
+                                        <strong>Date Conflict:</strong> 
+                                        @overlapWarning.Replace("⚠️ Warning: ", "")
+                                    </div>
+                                </div>
+                            }
+
+                            @if (selectedLeaveType?.RequiresDocuments == true)
+                            {
+                                <div class="mb-3">
+                                    <div class="alert alert-warning">
+                                        <i class="fas fa-paperclip me-2"></i>
+                                        <strong>Documentation Required:</strong> 
+                                        This leave type requires supporting documents. Please ensure you have the necessary documentation ready.
+                                    </div>
+                                </div>
+                            }
+
+                            <hr />
+
+                            <div class="d-flex justify-content-between">
+                                <button type="button" class="btn btn-outline-secondary" @onclick="SaveAsDraft" disabled="@isSubmitting">
+                                    <i class="fas fa-save me-2"></i>
+                                    Save as Draft
+                                </button>
+
+                                <div>
+                                    <button type="button" class="btn btn-secondary me-2" @onclick="Cancel">
+                                        Cancel
+                                    </button>
+                                    <button type="submit" class="btn btn-primary" disabled="@(isSubmitting || !IsFormValid())">
+                                        @if (isSubmitting)
+                                        {
+                                            <span class="spinner-border spinner-border-sm me-2"></span>
+                                        }
+                                        else
+                                        {
+                                            <i class="fas fa-paper-plane me-2"></i>
+                                        }
+                                        Submit Request
+                                    </button>
+                                </div>
+                            </div>
+                        </EditForm>
+                    }
+                    else if (isLoading)
+                    {
+                        <div class="text-center py-5">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                            <p class="mt-3 text-muted">Loading leave types...</p>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="text-center py-5">
+                            <i class="fas fa-exclamation-triangle fa-3x text-warning mb-3"></i>
+                            <h5>No Leave Types Available</h5>
+                            <p class="text-muted">Please contact your HR department.</p>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter] [SupplyParameterFromQuery] public int? LeaveTypeId { get; set; }
+
+    private CreateLeaveRequestDto leaveRequest = new();
+    private List<LeaveTypeBalanceDto>? availableLeaveTypes;
+    private LeaveTypeBalanceDto? selectedLeaveType;
+    private bool isLoading = true;
+    private bool isSubmitting = false;
+    private string errorMessage = string.Empty;
+    private decimal calculatedDays = 0;
+    private int currentEmployeeId;
+    private string overlapWarning = string.Empty;
+
+    // Helper property for boolean to string conversion
+    private string IsHalfDayString
+    {
+        get => leaveRequest.IsHalfDay.ToString().ToLower();
+        set
+        {
+            if (bool.TryParse(value, out bool result))
+            {
+                leaveRequest.IsHalfDay = result;
+                OnRequestTypeChangedInternal(result);
+            }
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            // Get current user's employee ID from authentication
+            var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+            if (authState.User.Identity?.IsAuthenticated == true)
+            {
+                var userId = authState.User.FindFirst("sub")?.Value ?? authState.User.FindFirst("http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier")?.Value;
+                if (!string.IsNullOrEmpty(userId))
+                {
+                    var employee = await EmployeeIdentityService.GetEmployeeAsync(userId);
+                    if (employee != null)
+                    {
+                        currentEmployeeId = employee.Id;
+                    }
+                    else
+                    {
+                        errorMessage = "Employee profile not found. Please contact your administrator.";
+                        isLoading = false;
+                        return;
+                    }
+                }
+                else
+                {
+                    errorMessage = "Unable to determine user identity. Please try logging out and back in.";
+                    isLoading = false;
+                    return;
+                }
+            }
+            else
+            {
+                errorMessage = "You must be logged in to access this page.";
+                isLoading = false;
+                return;
+            }
+
+            await LoadAvailableLeaveTypes();
+
+            // Pre-select leave type if provided in query parameter
+            if (LeaveTypeId.HasValue && availableLeaveTypes?.Any() == true)
+            {
+                leaveRequest.LeaveTypeId = LeaveTypeId.Value;
+                await OnLeaveTypeChanged();
+            }
+
+            // Set default dates
+            leaveRequest.StartDate = DateTime.Today.AddDays(1);
+            leaveRequest.EndDate = DateTime.Today.AddDays(1);
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error loading page: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task LoadAvailableLeaveTypes()
+    {
+        try
+        {
+            var result = await LeaveService.GetEmployeeLeaveBalancesAsync(currentEmployeeId);
+            if (result.IsSuccess)
+            {
+                availableLeaveTypes = result.Data?.Where(lb => lb.AvailableDays > 0).ToList() ?? new List<LeaveTypeBalanceDto>();
+            }
+            else
+            {
+                errorMessage = result.Message;
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error loading leave types: {ex.Message}";
+        }
+    }
+
+    private void OnRequestTypeChangedInternal(bool isHalfDay)
+    {
+        if (isHalfDay)
+        {
+            leaveRequest.EndDate = leaveRequest.StartDate;
+            leaveRequest.HalfDaySession = "Morning";
+        }
+        
+        _ = CalculateDays();
+    }
+
+    private async Task OnRequestTypeChanged(ChangeEventArgs e)
+    {
+        if (bool.TryParse(e.Value?.ToString(), out bool isHalfDay))
+        {
+            leaveRequest.IsHalfDay = isHalfDay;
+            OnRequestTypeChangedInternal(isHalfDay);
+        }
+    }
+
+    private void OnDateChanged(ChangeEventArgs e)
+    {
+        _ = CalculateDays();
+    }
+
+    private async Task OnLeaveTypeChanged()
+    {
+        selectedLeaveType = availableLeaveTypes?.FirstOrDefault(lt => lt.LeaveTypeId == leaveRequest.LeaveTypeId);
+        await CalculateDays();
+    }
+
+    private async Task CalculateDays()
+    {
+        if (leaveRequest.StartDate > DateTime.MinValue && leaveRequest.EndDate > DateTime.MinValue && 
+            leaveRequest.StartDate <= leaveRequest.EndDate)
+        {
+            if (leaveRequest.IsHalfDay)
+            {
+                calculatedDays = 0.5m;
+            }
+            else
+            {
+                var businessDays = 0;
+                var currentDate = leaveRequest.StartDate;
+                
+                while (currentDate <= leaveRequest.EndDate)
+                {
+                    if (currentDate.DayOfWeek != DayOfWeek.Saturday && currentDate.DayOfWeek != DayOfWeek.Sunday)
+                    {
+                        businessDays++;
+                    }
+                    currentDate = currentDate.AddDays(1);
+                }
+                
+                calculatedDays = businessDays;
+            }
+        }
+        else
+        {
+            calculatedDays = 0;
+        }
+
+        // Check for overlapping requests
+        await CheckForOverlappingRequests();
+
+        StateHasChanged();
+    }
+
+    // Wrapper methods for bind-Value:after handlers
+    private void CalculateDaysWrapper()
+    {
+        _ = CalculateDays();
+    }
+
+    private void OnLeaveTypeChangedWrapper()
+    {
+        selectedLeaveType = availableLeaveTypes?.FirstOrDefault(lt => lt.LeaveTypeId == leaveRequest.LeaveTypeId);
+        _ = CalculateDays();
+    }
+
+    private bool IsFormValid()
+    {
+        return leaveRequest.LeaveTypeId > 0 && 
+               leaveRequest.StartDate > DateTime.MinValue && 
+               leaveRequest.EndDate > DateTime.MinValue &&
+               !string.IsNullOrWhiteSpace(leaveRequest.Reason) &&
+               calculatedDays > 0 &&
+               (selectedLeaveType?.AvailableDays >= calculatedDays) &&
+               string.IsNullOrEmpty(overlapWarning); // Prevent submission if there are overlapping dates
+    }
+
+    private async Task SubmitRequest()
+    {
+        if (!IsFormValid()) return;
+
+        isSubmitting = true;
+        try
+        {
+            leaveRequest.EmployeeId = currentEmployeeId;
+            leaveRequest.DaysRequested = calculatedDays;
+            leaveRequest.Status = "Pending";
+
+            var result = await LeaveService.CreateLeaveRequestAsync(leaveRequest);
+            if (result.IsSuccess)
+            {
+                await JS.InvokeVoidAsync("alert", "Leave request submitted successfully!");
+                Navigation.NavigateTo("/leave/dashboard");
+            }
+            else
+            {
+                errorMessage = result.Message;
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error submitting request: {ex.Message}";
+        }
+        finally
+        {
+            isSubmitting = false;
+        }
+    }
+
+    private async Task SaveAsDraft()
+    {
+        isSubmitting = true;
+        try
+        {
+            leaveRequest.EmployeeId = currentEmployeeId;
+            leaveRequest.DaysRequested = calculatedDays;
+            leaveRequest.Status = "Draft";
+
+            var result = await LeaveService.CreateLeaveRequestAsync(leaveRequest);
+            if (result.IsSuccess)
+            {
+                await JS.InvokeVoidAsync("alert", "Leave request saved as draft!");
+                Navigation.NavigateTo("/leave/dashboard");
+            }
+            else
+            {
+                errorMessage = result.Message;
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error saving draft: {ex.Message}";
+        }
+        finally
+        {
+            isSubmitting = false;
+        }
+    }
+
+    private void Cancel()
+    {
+        Navigation.NavigateTo("/leave/dashboard");
+    }
+
+    private async Task CheckForOverlappingRequests()
+    {
+        overlapWarning = string.Empty;
+
+        if (leaveRequest.StartDate > DateTime.MinValue && leaveRequest.EndDate > DateTime.MinValue)
+        {
+            try
+            {
+                var existingRequests = await LeaveService.GetEmployeeLeaveRequestsAsync(currentEmployeeId, DateTime.Now.Year);
+                if (existingRequests.IsSuccess && existingRequests.Data?.Any() == true)
+                {
+                    var overlapping = existingRequests.Data
+                        .Where(lr => 
+                            lr.Status != "Cancelled" && 
+                            lr.Status != "Rejected" && 
+                            lr.Status != "Draft" &&
+                            // Check for date overlap
+                            lr.StartDate <= leaveRequest.EndDate &&
+                            lr.EndDate >= leaveRequest.StartDate)
+                        .ToList();
+
+                    if (overlapping.Any())
+                    {
+                        var conflictDetails = overlapping
+                            .Select(lr => $"'{lr.LeaveType?.Name}' from {lr.StartDate:dd/MM/yyyy} to {lr.EndDate:dd/MM/yyyy}")
+                            .Take(3); // Limit to first 3 conflicts
+
+                        overlapWarning = $"⚠️ Warning: The selected dates overlap with existing leave request(s): {string.Join(", ", conflictDetails)}";
+                        
+                        if (overlapping.Count > 3)
+                        {
+                            overlapWarning += $" and {overlapping.Count - 3} more.";
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                // Don't show overlap check errors to user, just log them
+                Console.WriteLine($"Error checking overlaps: {ex.Message}");
+            }
+        }
+    }
+}

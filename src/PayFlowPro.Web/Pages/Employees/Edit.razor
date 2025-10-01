@@ -1,0 +1,463 @@
+@page "/employees/{id:int}/edit"
+@using Microsoft.EntityFrameworkCore
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.AspNetCore.Components.Web
+@using Microsoft.AspNetCore.Authorization
+@using PayFlowPro.Core.Interfaces
+@using PayFlowPro.Data.Context
+@using PayFlowPro.Models.Entities
+@using PayFlowPro.Models.Enums
+@using PayFlowPro.Shared.DTOs.Employee
+@using System.ComponentModel.DataAnnotations
+@inject IDbContextFactory<ApplicationDbContext> DbContextFactory
+@inject IEmployeeService EmployeeService
+@inject NavigationManager Navigation
+@inject IJSRuntime JSRuntime
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@attribute [Authorize(Roles = "Admin,HR")]
+
+@* Page Title set via layout *@
+
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-md-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <div>
+                    <h2><i class="fas fa-user-edit"></i> Edit Employee</h2>
+                    @if (currentEmployee != null)
+                    {
+                        <p class="text-muted">
+                            Editing: <strong>@currentEmployee.FirstName @currentEmployee.LastName</strong> 
+                            <span class="badge badge-secondary">@currentEmployee.EmployeeCode</span>
+                        </p>
+                    }
+                </div>
+                <div>
+                    @if (currentEmployee != null)
+                    {
+                        <a href="/employees/@currentEmployee.Id" class="btn btn-outline-info me-2">
+                            <i class="fas fa-eye"></i> View Details
+                        </a>
+                    }
+                    <a href="/employees" class="btn btn-outline-secondary">
+                        <i class="fas fa-arrow-left"></i> Back to Employees
+                    </a>
+                </div>
+            </div>
+
+            @if (!string.IsNullOrEmpty(errorMessage))
+            {
+                <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                    <i class="fas fa-exclamation-circle"></i> @errorMessage
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            }
+
+            @if (!string.IsNullOrEmpty(successMessage))
+            {
+                <div class="alert alert-success alert-dismissible fade show" role="alert">
+                    <i class="fas fa-check-circle"></i> @successMessage
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            }
+
+            @if (isLoadingEmployee)
+            {
+                <div class="text-center py-5">
+                    <div class="spinner-border" role="status">
+                        <span class="sr-only">Loading employee...</span>
+                    </div>
+                    <p class="mt-2">Loading employee details...</p>
+                </div>
+            }
+            else if (currentEmployee == null)
+            {
+                <div class="alert alert-warning">
+                    <i class="fas fa-exclamation-triangle"></i> Employee not found or access denied.
+                </div>
+            }
+            else
+            {
+                <div class="card shadow">
+                    <div class="card-body">
+                        <EditForm Model="@employeeDto" OnValidSubmit="@HandleValidSubmit">
+                            <DataAnnotationsValidator />
+                            
+                            <div class="row">
+                                <!-- Personal Information -->
+                                <div class="col-lg-8">
+                                    <h5 class="mb-3 text-primary">
+                                        <i class="fas fa-user"></i> Personal Information
+                                    </h5>
+                                    
+                                    <div class="row">
+                                        <div class="col-md-6 mb-3">
+                                            <label class="form-label">First Name <span class="text-danger">*</span></label>
+                                            <InputText @bind-Value="employeeDto.FirstName" class="form-control" />
+                                            <ValidationMessage For="@(() => employeeDto.FirstName)" class="text-danger" />
+                                        </div>
+                                        <div class="col-md-6 mb-3">
+                                            <label class="form-label">Last Name <span class="text-danger">*</span></label>
+                                            <InputText @bind-Value="employeeDto.LastName" class="form-control" />
+                                            <ValidationMessage For="@(() => employeeDto.LastName)" class="text-danger" />
+                                        </div>
+                                        <div class="col-md-6 mb-3">
+                                            <label class="form-label">Email <span class="text-danger">*</span></label>
+                                            <InputText @bind-Value="employeeDto.Email" class="form-control" type="email" />
+                                            <ValidationMessage For="@(() => employeeDto.Email)" class="text-danger" />
+                                            @if (currentEmployee?.Email != employeeDto.Email)
+                                            {
+                                                <div class="form-text text-warning">
+                                                    <i class="fas fa-exclamation-triangle"></i> Changing email will affect user login credentials
+                                                </div>
+                                            }
+                                        </div>
+                                        <div class="col-md-6 mb-3">
+                                            <label class="form-label">Phone Number</label>
+                                            <InputText @bind-Value="employeeDto.PhoneNumber" class="form-control" />
+                                            <ValidationMessage For="@(() => employeeDto.PhoneNumber)" class="text-danger" />
+                                        </div>
+                                        <div class="col-md-6 mb-3">
+                                            <label class="form-label">Date of Birth <span class="text-danger">*</span></label>
+                                            <InputDate @bind-Value="employeeDto.DateOfBirth" class="form-control" />
+                                            <ValidationMessage For="@(() => employeeDto.DateOfBirth)" class="text-danger" />
+                                        </div>
+                                        <div class="col-md-6 mb-3">
+                                            <label class="form-label">Gender <span class="text-danger">*</span></label>
+                                            <InputSelect @bind-Value="employeeDto.Gender" class="form-select">
+                                                <option value="">Select Gender</option>
+                                                <option value="@Gender.Male">Male</option>
+                                                <option value="@Gender.Female">Female</option>
+                                            </InputSelect>
+                                            <ValidationMessage For="@(() => employeeDto.Gender)" class="text-danger" />
+                                        </div>
+                                        <div class="col-md-6 mb-3">
+                                            <label class="form-label">Marital Status <span class="text-danger">*</span></label>
+                                            <InputSelect @bind-Value="employeeDto.MaritalStatus" class="form-select">
+                                                <option value="">Select Status</option>
+                                                <option value="@MaritalStatus.Single">Single</option>
+                                                <option value="@MaritalStatus.Married">Married</option>
+                                                <option value="@MaritalStatus.Divorced">Divorced</option>
+                                                <option value="@MaritalStatus.Widowed">Widowed</option>
+                                            </InputSelect>
+                                            <ValidationMessage For="@(() => employeeDto.MaritalStatus)" class="text-danger" />
+                                        </div>
+                                        <div class="col-md-6 mb-3">
+                                            <label class="form-label">Date of Joining <span class="text-danger">*</span></label>
+                                            <InputDate @bind-Value="employeeDto.DateOfJoining" class="form-control" />
+                                            <ValidationMessage For="@(() => employeeDto.DateOfJoining)" class="text-danger" />
+                                        </div>
+                                    </div>
+
+                                    <h5 class="mb-3 text-primary mt-4">
+                                        <i class="fas fa-briefcase"></i> Employment Information
+                                    </h5>
+                                    
+                                    <div class="row">
+                                        <div class="col-md-6 mb-3">
+                                            <label class="form-label">Job Title <span class="text-danger">*</span></label>
+                                            <InputText @bind-Value="employeeDto.JobTitle" class="form-control" />
+                                            <ValidationMessage For="@(() => employeeDto.JobTitle)" class="text-danger" />
+                                        </div>
+                                        <div class="col-md-6 mb-3">
+                                            <label class="form-label">Department <span class="text-danger">*</span></label>
+                                            <InputSelect @bind-Value="employeeDto.DepartmentId" class="form-select">
+                                                <option value="">Select Department</option>
+                                                @foreach (var dept in departments)
+                                                {
+                                                    <option value="@dept.Id">@dept.Name</option>
+                                                }
+                                            </InputSelect>
+                                            <ValidationMessage For="@(() => employeeDto.DepartmentId)" class="text-danger" />
+                                        </div>
+                                        <div class="col-md-6 mb-3">
+                                            <label class="form-label">Basic Salary <span class="text-danger">*</span></label>
+                                            <InputNumber @bind-Value="employeeDto.BasicSalary" class="form-control" step="0.01" />
+                                            <ValidationMessage For="@(() => employeeDto.BasicSalary)" class="text-danger" />
+                                            @if (currentEmployee?.BasicSalary != employeeDto.BasicSalary)
+                                            {
+                                                <div class="form-text">
+                                                    Previous salary: <strong>@currentEmployee?.BasicSalary.ToString("C")</strong>
+                                                </div>
+                                            }
+                                        </div>
+                                        <div class="col-md-6 mb-3">
+                                            <label class="form-label">Company</label>
+                                            <InputSelect @bind-Value="employeeDto.CompanyId" class="form-select">
+                                                @foreach (var company in companies)
+                                                {
+                                                    <option value="@company.Id">@company.Name</option>
+                                                }
+                                            </InputSelect>
+                                            <ValidationMessage For="@(() => employeeDto.CompanyId)" class="text-danger" />
+                                        </div>
+                                        <div class="col-md-6 mb-3">
+                                            <label class="form-label">Employment Status <span class="text-danger">*</span></label>
+                                            <InputSelect @bind-Value="employeeDto.Status" class="form-select">
+                                                <option value="@EmploymentStatus.Active">Active</option>
+                                                <option value="@EmploymentStatus.Inactive">Inactive</option>
+                                                <option value="@EmploymentStatus.OnLeave">On Leave</option>
+                                                <option value="@EmploymentStatus.Terminated">Terminated</option>
+                                            </InputSelect>
+                                            <ValidationMessage For="@(() => employeeDto.Status)" class="text-danger" />
+                                        </div>
+                                        <div class="col-md-6 mb-3">
+                                            <label class="form-label">Date of Leaving</label>
+                                            <InputDate @bind-Value="employeeDto.DateOfLeaving" class="form-control" />
+                                            <ValidationMessage For="@(() => employeeDto.DateOfLeaving)" class="text-danger" />
+                                            <div class="form-text">Only set if employee has left the company</div>
+                                        </div>
+                                    </div>
+
+                                    <h5 class="mb-3 text-primary mt-4">
+                                        <i class="fas fa-address-card"></i> Additional Details
+                                    </h5>
+                                    
+                                    <div class="row">
+                                        <div class="col-md-12 mb-3">
+                                            <label class="form-label">Address</label>
+                                            <InputTextArea @bind-Value="employeeDto.Address" class="form-control" rows="3" />
+                                            <ValidationMessage For="@(() => employeeDto.Address)" class="text-danger" />
+                                        </div>
+                                        <div class="col-md-6 mb-3">
+                                            <label class="form-label">National ID</label>
+                                            <InputText @bind-Value="employeeDto.NationalId" class="form-control" />
+                                            <ValidationMessage For="@(() => employeeDto.NationalId)" class="text-danger" />
+                                        </div>
+                                        <div class="col-md-6 mb-3">
+                                            <label class="form-label">Tax ID</label>
+                                            <InputText @bind-Value="employeeDto.TaxId" class="form-control" />
+                                            <ValidationMessage For="@(() => employeeDto.TaxId)" class="text-danger" />
+                                        </div>
+                                        <div class="col-md-6 mb-3">
+                                            <label class="form-label">Bank Account Number</label>
+                                            <InputText @bind-Value="employeeDto.BankAccountNumber" class="form-control" />
+                                            <ValidationMessage For="@(() => employeeDto.BankAccountNumber)" class="text-danger" />
+                                        </div>
+                                        <div class="col-md-6 mb-3">
+                                            <label class="form-label">Bank Name</label>
+                                            <InputText @bind-Value="employeeDto.BankName" class="form-control" />
+                                            <ValidationMessage For="@(() => employeeDto.BankName)" class="text-danger" />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Sidebar Information -->
+                                <div class="col-lg-4">
+                                    <div class="card bg-light h-100">
+                                        <div class="card-header">
+                                            <h6 class="mb-0"><i class="fas fa-info-circle"></i> Employee Information</h6>
+                                        </div>
+                                        <div class="card-body">
+                                            <div class="mb-4">
+                                                <h6 class="text-primary">Current Details</h6>
+                                                <ul class="list-unstyled small">
+                                                    <li><i class="fas fa-id-badge text-info"></i> <strong>Code:</strong> @currentEmployee.EmployeeCode</li>
+                                                    <li><i class="fas fa-calendar text-info"></i> <strong>Joined:</strong> @currentEmployee.DateOfJoining.ToString("MMM dd, yyyy")</li>
+                                                    @if (currentEmployee.User != null)
+                                                    {
+                                                        <li><i class="fas fa-user-check text-success"></i> <strong>Has User Account</strong></li>
+                                                    }
+                                                    else
+                                                    {
+                                                        <li><i class="fas fa-user-times text-muted"></i> <strong>No User Account</strong></li>
+                                                    }
+                                                    <li><i class="fas fa-clock text-info"></i> <strong>Created:</strong> @currentEmployee.CreatedAt.ToString("MMM dd, yyyy")</li>
+                                                    <li><i class="fas fa-edit text-info"></i> <strong>Updated:</strong> @currentEmployee.UpdatedAt.ToString("MMM dd, yyyy")</li>
+                                                </ul>
+                                            </div>
+
+                                            <div class="mb-4">
+                                                <h6 class="text-warning">Important Notes</h6>
+                                                <ul class="list-unstyled small">
+                                                    <li><i class="fas fa-exclamation-triangle text-warning"></i> Changes to salary will affect future payslips</li>
+                                                    <li><i class="fas fa-exclamation-triangle text-warning"></i> Status changes may affect system access</li>
+                                                    <li><i class="fas fa-exclamation-triangle text-warning"></i> Email changes affect login credentials</li>
+                                                </ul>
+                                            </div>
+
+                                            <div class="mb-3">
+                                                <h6 class="text-primary">Required Fields</h6>
+                                                <ul class="list-unstyled small">
+                                                    <li><i class="fas fa-check text-success"></i> Personal Information</li>
+                                                    <li><i class="fas fa-check text-success"></i> Employment Details</li>
+                                                    <li><i class="fas fa-check text-success"></i> Status & Department</li>
+                                                </ul>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <hr class="my-4" />
+
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div class="text-muted">
+                                    <small><i class="fas fa-info-circle"></i> All fields marked with <span class="text-danger">*</span> are required</small>
+                                </div>
+                                <div>
+                                    <button type="button" class="btn btn-outline-secondary me-2" @onclick="@(() => Navigation.NavigateTo("/employees"))">
+                                        <i class="fas fa-times"></i> Cancel
+                                    </button>
+                                    <button type="submit" class="btn btn-primary" disabled="@isLoading">
+                                        @if (isLoading)
+                                        {
+                                            <span class="spinner-border spinner-border-sm" role="status"></span>
+                                            <span>Updating...</span>
+                                        }
+                                        else
+                                        {
+                                            <i class="fas fa-save"></i>
+                                            <span>Update Employee</span>
+                                        }
+                                    </button>
+                                </div>
+                            </div>
+                        </EditForm>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter] public int Id { get; set; }
+
+    private UpdateEmployeeDto employeeDto = new();
+    private Employee? currentEmployee = null;
+    
+    private List<Department> departments = new();
+    private List<Company> companies = new();
+    
+    private bool isLoading = false;
+    private bool isLoadingEmployee = true;
+    private string? errorMessage = null;
+    private string? successMessage = null;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadEmployeeData();
+        await LoadDropdownData();
+    }
+
+    private async Task LoadEmployeeData()
+    {
+        try
+    {
+            isLoadingEmployee = true;
+            currentEmployee = await EmployeeService.GetEmployeeByIdAsync(Id);
+            
+            if (currentEmployee != null)
+            {
+                // Populate the DTO with current employee data
+                employeeDto = new UpdateEmployeeDto
+                {
+                    FirstName = currentEmployee.FirstName,
+                    LastName = currentEmployee.LastName,
+                    Email = currentEmployee.Email,
+                    PhoneNumber = currentEmployee.PhoneNumber,
+                    DateOfBirth = currentEmployee.DateOfBirth,
+                    DateOfJoining = currentEmployee.DateOfJoining,
+                    DateOfLeaving = currentEmployee.DateOfLeaving,
+                    Address = currentEmployee.Address,
+                    NationalId = currentEmployee.NationalId,
+                    TaxId = currentEmployee.TaxId,
+                    BankAccountNumber = currentEmployee.BankAccountNumber,
+                    BankName = currentEmployee.BankName,
+                    Gender = currentEmployee.Gender,
+                    MaritalStatus = currentEmployee.MaritalStatus,
+                    Status = currentEmployee.Status,
+                    JobTitle = currentEmployee.JobTitle,
+                    BasicSalary = currentEmployee.BasicSalary,
+                    CompanyId = currentEmployee.CompanyId,
+                    DepartmentId = currentEmployee.DepartmentId
+                };
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Failed to load employee data: {ex.Message}";
+        }
+        finally
+        {
+            isLoadingEmployee = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task LoadDropdownData()
+    {
+        try
+        {
+            using var dbContext = await DbContextFactory.CreateDbContextAsync();
+            
+            // Load departments
+            departments = await dbContext.Departments
+                .Where(d => d.IsActive)
+                .OrderBy(d => d.Name)
+                .ToListAsync();
+
+            // Load companies
+            companies = await dbContext.Companies
+                .Where(c => c.IsActive)
+                .OrderBy(c => c.Name)
+                .ToListAsync();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = "Failed to load form data. Please refresh the page and try again.";
+        }
+    }
+
+    private async Task HandleValidSubmit()
+    {
+        try
+        {
+            isLoading = true;
+            errorMessage = null;
+            successMessage = null;
+
+            // Get current user for audit trail
+            var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+            var currentUserId = authState.User?.FindFirst("sub")?.Value 
+                             ?? authState.User?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
+                             ?? "system";
+
+            // Check if email is already taken by another employee
+            if (currentEmployee?.Email != employeeDto.Email)
+            {
+                if (!await EmployeeService.IsEmailAvailableAsync(employeeDto.Email))
+                {
+                    errorMessage = "An employee with this email address already exists.";
+                    return;
+                }
+            }
+
+            // Update employee
+            var updatedEmployee = await EmployeeService.UpdateEmployeeAsync(Id, employeeDto, currentUserId);
+            
+            successMessage = $"Employee {updatedEmployee.FullName} ({updatedEmployee.EmployeeCode}) updated successfully!";
+            
+            // Reload employee data to reflect changes
+            currentEmployee = updatedEmployee;
+            
+            // Show success message
+            StateHasChanged();
+            await Task.Delay(2000);
+            
+            // Redirect to employee details page
+            Navigation.NavigateTo($"/employees/{updatedEmployee.Id}");
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Failed to update employee: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+}

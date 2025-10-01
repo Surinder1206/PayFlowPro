@@ -1,0 +1,6 @@
+@PayslipManagement.API_HostAddress = http://localhost:5280
+
+GET {{PayslipManagement.API_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

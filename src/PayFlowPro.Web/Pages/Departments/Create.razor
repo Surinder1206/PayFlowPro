@@ -1,0 +1,250 @@
+@page "/departments/create"
+@using PayFlowPro.Models.Entities
+@using PayFlowPro.Data.Context
+@using Microsoft.EntityFrameworkCore
+@using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.AspNetCore.Components.Authorization
+@inject ApplicationDbContext dbContext
+@inject NavigationManager Navigation
+@inject IJSRuntime JSRuntime
+@attribute [Authorize(Roles = "Admin,HR")]
+
+<PageTitle>Create Department - PayFlow Pro</PageTitle>
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1 class="h3">
+        <i class="fas fa-plus me-2"></i>
+        Create New Department
+    </h1>
+    <a href="/departments" class="btn btn-outline-secondary">
+        <i class="fas fa-arrow-left me-1"></i>
+        Back to Departments
+    </a>
+</div>
+
+<div class="row">
+    <div class="col-lg-8 col-xl-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-building me-2"></i>
+                    Department Information
+                </h5>
+            </div>
+            <div class="card-body">
+                <EditForm Model="department" OnValidSubmit="HandleValidSubmit">
+                    <DataAnnotationsValidator />
+                    <ValidationSummary class="alert alert-danger" />
+
+                    <div class="mb-3">
+                        <label for="code" class="form-label">Department Code <span class="text-danger">*</span></label>
+                        <InputText id="code" class="form-control" @bind-Value="department.Code" placeholder="e.g., IT, HR, FIN" />
+                        <ValidationMessage For="() => department.Code" class="text-danger" />
+                        <div class="form-text">
+                            A unique code to identify the department (e.g., IT, HR, FIN, SALES)
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="name" class="form-label">Department Name <span class="text-danger">*</span></label>
+                        <InputText id="name" class="form-control" @bind-Value="department.Name" placeholder="e.g., Information Technology" />
+                        <ValidationMessage For="() => department.Name" class="text-danger" />
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="description" class="form-label">Description</label>
+                        <InputTextArea id="description" class="form-control" @bind-Value="department.Description" 
+                                     rows="3" placeholder="Brief description of the department's role and responsibilities..." />
+                        <ValidationMessage For="() => department.Description" class="text-danger" />
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="manager" class="form-label">Department Manager</label>
+                        <InputSelect id="manager" class="form-control" @bind-Value="department.ManagerEmployeeId">
+                            <option value="">Select a manager (optional)</option>
+                            @foreach (var employee in availableManagers)
+                            {
+                                <option value="@employee.Id">@employee.FirstName @employee.LastName (@employee.EmployeeCode) - @employee.JobTitle</option>
+                            }
+                        </InputSelect>
+                        <ValidationMessage For="() => department.ManagerEmployeeId" class="text-danger" />
+                        <div class="form-text">
+                            You can assign a manager now or later from the department edit page
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <InputCheckbox id="isActive" class="form-check-input" @bind-Value="department.IsActive" />
+                            <label class="form-check-label" for="isActive">
+                                Active Department
+                            </label>
+                        </div>
+                        <div class="form-text">
+                            Inactive departments won't be available for new employee assignments
+                        </div>
+                    </div>
+
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-primary" disabled="@isSubmitting">
+                            @if (isSubmitting)
+                            {
+                                <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                                <span>Creating...</span>
+                            }
+                            else
+                            {
+                                <i class="fas fa-save me-2"></i>
+                                <span>Create Department</span>
+                            }
+                        </button>
+                        <a href="/departments" class="btn btn-outline-secondary">
+                            Cancel
+                        </a>
+                    </div>
+                </EditForm>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-lg-4 col-xl-6">
+        <div class="card">
+            <div class="card-header">
+                <h6 class="card-title mb-0">
+                    <i class="fas fa-info-circle me-2"></i>
+                    Guidelines
+                </h6>
+            </div>
+            <div class="card-body">
+                <h6>Department Code</h6>
+                <ul class="small text-muted">
+                    <li>Keep it short (2-10 characters)</li>
+                    <li>Use uppercase letters</li>
+                    <li>Make it memorable and meaningful</li>
+                    <li>Examples: IT, HR, FIN, SALES, MKT</li>
+                </ul>
+
+                <h6 class="mt-3">Department Name</h6>
+                <ul class="small text-muted">
+                    <li>Use the full, official name</li>
+                    <li>Be descriptive and clear</li>
+                    <li>Examples: Information Technology, Human Resources, Finance</li>
+                </ul>
+
+                <h6 class="mt-3">Manager Assignment</h6>
+                <ul class="small text-muted">
+                    <li>Only employees without existing departments can be managers</li>
+                    <li>Managers can be changed later</li>
+                    <li>A department can exist without a manager</li>
+                </ul>
+
+                <div class="alert alert-info mt-3">
+                    <i class="fas fa-lightbulb me-2"></i>
+                    <strong>Tip:</strong> You can always edit department details later, including assigning or changing the manager.
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private Department department = new()
+    {
+        IsActive = true,
+        CreatedAt = DateTime.UtcNow
+    };
+    
+    private List<Employee> availableManagers = new();
+    private bool isSubmitting = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAvailableManagers();
+        await LoadCompanyId();
+    }
+
+    private async Task LoadAvailableManagers()
+    {
+        try
+        {
+            // Load employees who could potentially be managers
+            // For now, we'll show all employees, but in a real scenario you might want to filter by job level, etc.
+            availableManagers = await dbContext.Employees
+                .Where(e => e.Status == Models.Enums.EmploymentStatus.Active)
+                .OrderBy(e => e.FirstName)
+                .ThenBy(e => e.LastName)
+                .ToListAsync();
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("alert", $"Error loading employees: {ex.Message}");
+        }
+    }
+
+    private async Task LoadCompanyId()
+    {
+        try
+        {
+            // Get the first (default) company for now
+            // In a multi-tenant scenario, this would be based on the logged-in user's company
+            var company = await dbContext.Companies.FirstOrDefaultAsync();
+            if (company != null)
+            {
+                department.CompanyId = company.Id;
+            }
+            else
+            {
+                await JSRuntime.InvokeVoidAsync("alert", "No company found. Please contact your administrator.");
+            }
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("alert", $"Error loading company information: {ex.Message}");
+        }
+    }
+
+    private async Task HandleValidSubmit()
+    {
+        if (isSubmitting) return;
+        
+        isSubmitting = true;
+        StateHasChanged();
+
+        try
+        {
+            // Check if department code already exists
+            if (!string.IsNullOrEmpty(department.Code))
+            {
+                var existingDepartment = await dbContext.Departments
+                    .FirstOrDefaultAsync(d => d.Code != null && d.Code.ToLower() == department.Code.ToLower());
+
+                if (existingDepartment != null)
+                {
+                    await JSRuntime.InvokeVoidAsync("alert", $"A department with code '{department.Code}' already exists. Please use a different code.");
+                    return;
+                }
+            }
+
+            // Set audit fields
+            department.CreatedAt = DateTime.UtcNow;
+            department.UpdatedAt = DateTime.UtcNow;
+
+            // Add to database
+            dbContext.Departments.Add(department);
+            await dbContext.SaveChangesAsync();
+
+            // Show success message and navigate back
+            await JSRuntime.InvokeVoidAsync("alert", $"Department '{department.Name}' has been created successfully!");
+            Navigation.NavigateTo("/departments");
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("alert", $"Error creating department: {ex.Message}");
+        }
+        finally
+        {
+            isSubmitting = false;
+            StateHasChanged();
+        }
+    }
+}

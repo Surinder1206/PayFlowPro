@@ -1,0 +1,558 @@
+@page "/leave/calendar"
+@using PayFlowPro.Models.DTOs.Leave
+@using PayFlowPro.Core.Services
+@using PayFlowPro.Shared.DTOs
+@inject ILeaveManagementService LeaveService
+@inject IJSRuntime JS
+@attribute [Authorize(Roles = "Admin,HR,Manager,Employee")]
+
+<div class="container-fluid py-4">
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h2 class="mb-0">
+                            <i class="fas fa-calendar-alt text-primary me-2"></i>
+                            Leave Calendar
+                        </h2>
+                        <div class="d-flex gap-2 align-items-center">
+                            <div class="btn-group" role="group">
+                                <button type="button" class="btn @(currentView == "month" ? "btn-primary" : "btn-outline-primary") btn-sm" @onclick="@(() => SetView("month"))">
+                                    Month
+                                </button>
+                                <button type="button" class="btn @(currentView == "week" ? "btn-primary" : "btn-outline-primary") btn-sm" @onclick="@(() => SetView("week"))">
+                                    Week
+                                </button>
+                            </div>
+                            <button class="btn btn-outline-secondary btn-sm" @onclick="GoToPrevious">
+                                <i class="fas fa-chevron-left"></i>
+                            </button>
+                            <button class="btn btn-outline-primary btn-sm" @onclick="GoToToday">
+                                Today
+                            </button>
+                            <button class="btn btn-outline-secondary btn-sm" @onclick="GoToNext">
+                                <i class="fas fa-chevron-right"></i>
+                            </button>
+                            <span class="fw-bold text-primary ms-2">@GetCurrentPeriodText()</span>
+                        </div>
+                    </div>
+
+                    <!-- Legend -->
+                    <div class="row mb-3">
+                        <div class="col-12">
+                            <div class="d-flex flex-wrap gap-3">
+                                <span class="badge bg-success me-2"><i class="fas fa-circle me-1"></i>Approved</span>
+                                <span class="badge bg-warning me-2"><i class="fas fa-circle me-1"></i>Pending</span>
+                                <span class="badge bg-danger me-2"><i class="fas fa-circle me-1"></i>Rejected</span>
+                                <span class="badge bg-info me-2"><i class="fas fa-circle me-1"></i>Half Day</span>
+                                <span class="badge bg-secondary me-2"><i class="fas fa-circle me-1"></i>Weekend</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Filters -->
+                    <div class="row mb-3">
+                        <div class="col-md-4">
+                            <label class="form-label">Leave Type Filter</label>
+                            <select class="form-select" @bind="selectedLeaveTypeId" @bind:after="ApplyFilters">
+                                <option value="0">All Leave Types</option>
+                                @foreach (var leaveType in leaveTypes)
+                                {
+                                    <option value="@leaveType.Id">@leaveType.Name</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Status Filter</label>
+                            <select class="form-select" @bind="selectedStatus" @bind:after="ApplyFilters">
+                                <option value="">All Statuses</option>
+                                <option value="Approved">Approved</option>
+                                <option value="Pending">Pending</option>
+                                <option value="Rejected">Rejected</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Department Filter</label>
+                            <select class="form-select" @bind="selectedDepartmentId" @bind:after="ApplyFilters">
+                                <option value="0">All Departments</option>
+                                @foreach (var dept in departments)
+                                {
+                                    <option value="@dept.Id">@dept.Name</option>
+                                }
+                            </select>
+                        </div>
+                    </div>
+
+                    @if (isLoading)
+                    {
+                        <div class="text-center py-5">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                            <p class="mt-2">Loading calendar data...</p>
+                        </div>
+                    }
+                    else
+                    {
+                        @if (currentView == "month")
+                        {
+                            <div class="calendar-month">
+                                <!-- Month Calendar Header -->
+                                <div class="row">
+                                    @foreach (var day in GetDayHeaders())
+                                    {
+                                        <div class="col text-center fw-bold py-2 border-bottom">
+                                            @day
+                                        </div>
+                                    }
+                                </div>
+                                
+                                <!-- Month Calendar Body -->
+                                @for (int week = 0; week < GetWeeksInMonth(); week++)
+                                {
+                                    <div class="row">
+                                        @for (int dayIndex = 0; dayIndex < 7; dayIndex++)
+                                        {
+                                            var date = GetDateForCell(week, dayIndex);
+                                            var dayLeaves = GetLeavesForDate(date);
+                                            var isCurrentMonth = date.Month == currentDate.Month;
+                                            var isToday = date.Date == DateTime.Today;
+                                            var isWeekend = date.DayOfWeek == DayOfWeek.Saturday || date.DayOfWeek == DayOfWeek.Sunday;
+                                            
+                                            <div class="col border calendar-cell @(isCurrentMonth ? "" : "text-muted") @(isToday ? "bg-light" : "") @(isWeekend ? "weekend-cell" : "")"
+                                                 style="min-height: 120px; position: relative;">
+                                                
+                                                <!-- Date Number -->
+                                                <div class="d-flex justify-content-between align-items-center mb-1">
+                                                    <span class="fw-bold @(isToday ? "text-primary" : "")">@date.Day</span>
+                                                    @if (dayLeaves.Any())
+                                                    {
+                                                        <span class="badge bg-info rounded-pill">@dayLeaves.Count</span>
+                                                    }
+                                                </div>
+                                                
+                                                <!-- Leave Requests for this day -->
+                                                <div class="leave-requests">
+                                                    @foreach (var leave in dayLeaves.Take(3))
+                                                    {
+                                                        <div class="leave-item mb-1 p-1 rounded text-white @GetLeaveStatusClass(leave.Status)" 
+                                                             style="font-size: 0.75rem; cursor: pointer;"
+                                                             @onclick="() => ShowLeaveDetails(leave)">
+                                                            <div class="fw-bold">@leave.EmployeeName.Split(' ')[0]</div>
+                                                            <div>@leave.LeaveTypeName @(leave.IsHalfDay ? "(Half)" : "")</div>
+                                                        </div>
+                                                    }
+                                                    @if (dayLeaves.Count > 3)
+                                                    {
+                                                        <div class="text-primary small" style="cursor: pointer;" @onclick="() => ShowAllLeavesForDate(date)">
+                                                            +@(dayLeaves.Count - 3) more...
+                                                        </div>
+                                                    }
+                                                </div>
+                                            </div>
+                                        }
+                                    </div>
+                                }
+                            </div>
+                        }
+                        else
+                        {
+                            <!-- Week View -->
+                            <div class="calendar-week">
+                                <div class="table-responsive">
+                                    <table class="table table-bordered">
+                                        <thead>
+                                            <tr>
+                                                <th style="width: 100px;">Time</th>
+                                                @foreach (var day in GetWeekDays())
+                                                {
+                                                    <th class="text-center">
+                                                        <div>@day.ToString("ddd")</div>
+                                                        <div class="fw-bold">@day.ToString("MMM dd")</div>
+                                                    </th>
+                                                }
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @foreach (var employee in GetEmployeesWithLeaves())
+                                            {
+                                                <tr>
+                                                    <td class="fw-bold align-middle">@employee.Name</td>
+                                                    @foreach (var day in GetWeekDays())
+                                                    {
+                                                        var employeeLeaves = GetEmployeeLeavesForDate(employee.Id, day);
+                                                        <td class="text-center position-relative" style="min-height: 60px;">
+                                                            @foreach (var leave in employeeLeaves)
+                                                            {
+                                                                <div class="leave-block p-1 mb-1 rounded text-white @GetLeaveStatusClass(leave.Status)"
+                                                                     style="cursor: pointer; font-size: 0.75rem;"
+                                                                     @onclick="() => ShowLeaveDetails(leave)">
+                                                                    @leave.LeaveTypeName @(leave.IsHalfDay ? "(Half)" : "")
+                                                                </div>
+                                                            }
+                                                        </td>
+                                                    }
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        }
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Leave Details Modal -->
+<div class="modal fade" id="leaveDetailsModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Leave Request Details</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                @if (selectedLeaveDetails != null)
+                {
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6>Employee Information</h6>
+                            <p><strong>Name:</strong> @selectedLeaveDetails.EmployeeName</p>
+                            <p><strong>Department:</strong> @selectedLeaveDetails.DepartmentName</p>
+                            <p><strong>Request Number:</strong> @selectedLeaveDetails.RequestNumber</p>
+                        </div>
+                        <div class="col-md-6">
+                            <h6>Leave Details</h6>
+                            <p><strong>Type:</strong> <span class="badge" style="background-color: @selectedLeaveDetails.LeaveTypeColor">@selectedLeaveDetails.LeaveTypeName</span></p>
+                            <p><strong>Duration:</strong> @selectedLeaveDetails.DaysRequested days @(selectedLeaveDetails.IsHalfDay ? "(Half Day)" : "")</p>
+                            <p><strong>Status:</strong> <span class="badge @GetLeaveStatusClass(selectedLeaveDetails.Status)">@selectedLeaveDetails.Status</span></p>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-12">
+                            <h6>Request Information</h6>
+                            <p><strong>Start Date:</strong> @selectedLeaveDetails.StartDate.ToString("MMM dd, yyyy")</p>
+                            <p><strong>End Date:</strong> @selectedLeaveDetails.EndDate.ToString("MMM dd, yyyy")</p>
+                            <p><strong>Reason:</strong> @selectedLeaveDetails.Reason</p>
+                            @if (!string.IsNullOrEmpty(selectedLeaveDetails.ApproverComments))
+                            {
+                                <p><strong>Approver Comments:</strong> @selectedLeaveDetails.ApproverComments</p>
+                            }
+                            <p><strong>Submitted:</strong> @selectedLeaveDetails.SubmittedAt.ToString("MMM dd, yyyy HH:mm")</p>
+                            @if (selectedLeaveDetails.ReviewedAt.HasValue)
+                            {
+                                <p><strong>Reviewed:</strong> @selectedLeaveDetails.ReviewedAt.Value.ToString("MMM dd, yyyy HH:mm")</p>
+                            }
+                        </div>
+                    </div>
+                }
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                @if (selectedLeaveDetails != null && selectedLeaveDetails.Status == "Pending")
+                {
+                    <button type="button" class="btn btn-success" @onclick="() => QuickApprove(selectedLeaveDetails.Id)">
+                        <i class="fas fa-check me-1"></i>Approve
+                    </button>
+                    <button type="button" class="btn btn-danger" @onclick="() => QuickReject(selectedLeaveDetails.Id)">
+                        <i class="fas fa-times me-1"></i>Reject
+                    </button>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .calendar-cell {
+        transition: background-color 0.2s;
+    }
+    
+    .calendar-cell:hover {
+        background-color: #f8f9fa !important;
+    }
+    
+    .weekend-cell {
+        background-color: #f1f3f4;
+    }
+    
+    .leave-item, .leave-block {
+        transition: transform 0.2s;
+    }
+    
+    .leave-item:hover, .leave-block:hover {
+        transform: scale(1.02);
+    }
+    
+    .bg-success {
+        background-color: #28a745 !important;
+    }
+    
+    .bg-warning {
+        background-color: #ffc107 !important;
+        color: #000 !important;
+    }
+    
+    .bg-danger {
+        background-color: #dc3545 !important;
+    }
+</style>
+
+@code {
+    private DateTime currentDate = DateTime.Today;
+    private string currentView = "month";
+    private List<CalendarLeaveRequestDto> calendarData = new();
+    private List<LeaveTypeDto> leaveTypes = new();
+    private List<DepartmentBasicDto> departments = new();
+    private bool isLoading = true;
+    
+    // Filters
+    private int selectedLeaveTypeId = 0;
+    private string selectedStatus = "";
+    private int selectedDepartmentId = 0;
+    
+    // Selected leave for details modal
+    private CalendarLeaveRequestDto? selectedLeaveDetails;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        isLoading = true;
+        StateHasChanged();
+
+        try
+        {
+            // Calculate date range based on current view
+            var startDate = currentView == "month" ? 
+                new DateTime(currentDate.Year, currentDate.Month, 1).AddDays(-(int)new DateTime(currentDate.Year, currentDate.Month, 1).DayOfWeek) :
+                currentDate.AddDays(-(int)currentDate.DayOfWeek);
+            
+            var endDate = currentView == "month" ?
+                startDate.AddDays(42) : // 6 weeks for month view
+                startDate.AddDays(7);   // 1 week for week view
+
+            // Load calendar data
+            var calendarResult = await LeaveService.GetLeaveCalendarAsync(startDate, endDate);
+            if (calendarResult.IsSuccess)
+            {
+                calendarData = calendarResult.Data ?? new List<CalendarLeaveRequestDto>();
+            }
+
+            // Load leave types for filtering
+            // You'll need to add this method to the service
+            leaveTypes = new List<LeaveTypeDto>
+            {
+                new LeaveTypeDto { Id = 1, Name = "Annual Leave", Code = "AL", ColorCode = "#28a745" },
+                new LeaveTypeDto { Id = 2, Name = "Sick Leave", Code = "SL", ColorCode = "#dc3545" },
+                new LeaveTypeDto { Id = 3, Name = "Personal Leave", Code = "PL", ColorCode = "#ffc107" },
+                new LeaveTypeDto { Id = 4, Name = "Maternity/Paternity", Code = "ML", ColorCode = "#17a2b8" }
+            };
+
+            // Load departments for filtering
+            departments = new List<DepartmentBasicDto>
+            {
+                new DepartmentBasicDto { Id = 1, Name = "Information Technology" },
+                new DepartmentBasicDto { Id = 2, Name = "Human Resources" },
+                new DepartmentBasicDto { Id = 3, Name = "Finance" },
+                new DepartmentBasicDto { Id = 4, Name = "Operations" }
+            };
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading calendar data: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private void SetView(string view)
+    {
+        currentView = view;
+        LoadData();
+    }
+
+    private void GoToPrevious()
+    {
+        currentDate = currentView == "month" ? 
+            currentDate.AddMonths(-1) : 
+            currentDate.AddDays(-7);
+        LoadData();
+    }
+
+    private void GoToNext()
+    {
+        currentDate = currentView == "month" ? 
+            currentDate.AddMonths(1) : 
+            currentDate.AddDays(7);
+        LoadData();
+    }
+
+    private void GoToToday()
+    {
+        currentDate = DateTime.Today;
+        LoadData();
+    }
+
+    private string GetCurrentPeriodText()
+    {
+        return currentView == "month" ? 
+            currentDate.ToString("MMMM yyyy") : 
+            $"Week of {GetWeekDays().First():MMM dd, yyyy}";
+    }
+
+    private string[] GetDayHeaders()
+    {
+        return new[] { "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat" };
+    }
+
+    private int GetWeeksInMonth()
+    {
+        return 6; // Standard calendar grid
+    }
+
+    private DateTime GetDateForCell(int week, int dayIndex)
+    {
+        var firstDayOfMonth = new DateTime(currentDate.Year, currentDate.Month, 1);
+        var startOfCalendar = firstDayOfMonth.AddDays(-(int)firstDayOfMonth.DayOfWeek);
+        return startOfCalendar.AddDays(week * 7 + dayIndex);
+    }
+
+    private List<DateTime> GetWeekDays()
+    {
+        var startOfWeek = currentDate.AddDays(-(int)currentDate.DayOfWeek);
+        return Enumerable.Range(0, 7).Select(i => startOfWeek.AddDays(i)).ToList();
+    }
+
+    private List<CalendarLeaveRequestDto> GetLeavesForDate(DateTime date)
+    {
+        return calendarData.Where(l => 
+            date >= l.StartDate.Date && date <= l.EndDate.Date &&
+            (selectedLeaveTypeId == 0 || l.LeaveTypeId == selectedLeaveTypeId) &&
+            (string.IsNullOrEmpty(selectedStatus) || l.Status == selectedStatus) &&
+            (selectedDepartmentId == 0 || l.DepartmentId == selectedDepartmentId)
+        ).ToList();
+    }
+
+    private List<EmployeeCalendarDto> GetEmployeesWithLeaves()
+    {
+        var weekDays = GetWeekDays();
+        return calendarData
+            .Where(l => weekDays.Any(d => d >= l.StartDate.Date && d <= l.EndDate.Date))
+            .GroupBy(l => new { l.EmployeeId, l.EmployeeName })
+            .Select(g => new EmployeeCalendarDto 
+            { 
+                Id = g.Key.EmployeeId, 
+                Name = g.Key.EmployeeName 
+            })
+            .Take(10) // Limit to prevent overcrowding
+            .ToList();
+    }
+
+    private List<CalendarLeaveRequestDto> GetEmployeeLeavesForDate(int employeeId, DateTime date)
+    {
+        return calendarData.Where(l => 
+            l.EmployeeId == employeeId &&
+            date >= l.StartDate.Date && date <= l.EndDate.Date
+        ).ToList();
+    }
+
+    private string GetLeaveStatusClass(string status)
+    {
+        return status switch
+        {
+            "Approved" => "bg-success",
+            "Pending" => "bg-warning",
+            "Rejected" => "bg-danger",
+            _ => "bg-secondary"
+        };
+    }
+
+    private async Task ShowLeaveDetails(CalendarLeaveRequestDto leave)
+    {
+        selectedLeaveDetails = leave;
+        await JS.InvokeVoidAsync("showModal", "leaveDetailsModal");
+    }
+
+    private void ShowAllLeavesForDate(DateTime date)
+    {
+        // Future enhancement: Show all leaves for a specific date in a separate modal
+    }
+
+    private async Task ApplyFilters()
+    {
+        await LoadData();
+    }
+
+    private async Task QuickApprove(int leaveRequestId)
+    {
+        try
+        {
+            var result = await LeaveService.ApproveLeaveRequestAsync(leaveRequestId, 1, "Quick approval from calendar");
+            if (result.IsSuccess)
+            {
+                await JS.InvokeVoidAsync("hideModal", "leaveDetailsModal");
+                await LoadData();
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error approving leave: {ex.Message}");
+        }
+    }
+
+    private async Task QuickReject(int leaveRequestId)
+    {
+        try
+        {
+            var result = await LeaveService.RejectLeaveRequestAsync(leaveRequestId, 1, "Quick rejection from calendar");
+            if (result.IsSuccess)
+            {
+                await JS.InvokeVoidAsync("hideModal", "leaveDetailsModal");
+                await LoadData();
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error rejecting leave: {ex.Message}");
+        }
+    }
+
+    // Helper classes for calendar display
+    private class EmployeeCalendarDto
+    {
+        public int Id { get; set; }
+        public string Name { get; set; } = string.Empty;
+    }
+
+    private class DepartmentBasicDto
+    {
+        public int Id { get; set; }
+        public string Name { get; set; } = string.Empty;
+    }
+}
+
+<script>
+    window.showModal = (modalId) => {
+        const modal = new bootstrap.Modal(document.getElementById(modalId));
+        modal.show();
+    };
+    
+    window.hideModal = (modalId) => {
+        const modalElement = document.getElementById(modalId);
+        const modal = bootstrap.Modal.getInstance(modalElement);
+        if (modal) {
+            modal.hide();
+        }
+    };
+</script>

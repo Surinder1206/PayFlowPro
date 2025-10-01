@@ -1,0 +1,414 @@
+@page "/leave/request/{Id:int}"
+@using PayFlowPro.Models.DTOs.Leave
+@using PayFlowPro.Core.Services
+@using PayFlowPro.Shared.DTOs
+@inject ILeaveManagementService LeaveService
+@inject IJSRuntime JS
+@inject NavigationManager Navigation
+@inject AuthenticationStateProvider AuthStateProvider
+@attribute [Authorize]
+
+<PageTitle>Leave Request Details</PageTitle>
+
+<div class="container-fluid py-4">
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h2 class="mb-0">
+                            <i class="fas fa-eye text-primary me-2"></i>
+                            Leave Request Details
+                        </h2>
+                        <div>
+                            <button class="btn btn-outline-secondary me-2" @onclick="GoBack">
+                                <i class="fas fa-arrow-left me-1"></i>
+                                Back
+                            </button>
+                            @if (leaveRequest != null && leaveRequest.Status == "Pending")
+                            {
+                                <button class="btn btn-warning me-2" @onclick="EditRequest">
+                                    <i class="fas fa-edit me-1"></i>
+                                    Edit
+                                </button>
+                                <button class="btn btn-danger" @onclick="CancelRequest">
+                                    <i class="fas fa-times me-1"></i>
+                                    Cancel Request
+                                </button>
+                            }
+                        </div>
+                    </div>
+
+                    @if (isLoading)
+                    {
+                        <div class="text-center py-5">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                            <p class="mt-2">Loading request details...</p>
+                        </div>
+                    }
+                    else if (leaveRequest == null)
+                    {
+                        <div class="alert alert-warning" role="alert">
+                            <i class="fas fa-exclamation-triangle me-2"></i>
+                            Leave request not found or you don't have permission to view it.
+                        </div>
+                    }
+                    else
+                    {
+                        <!-- Request Header -->
+                        <div class="row mb-4">
+                            <div class="col-12">
+                                <div class="card bg-light">
+                                    <div class="card-body">
+                                        <div class="row">
+                                            <div class="col-md-3">
+                                                <h6 class="text-muted mb-1">Request Number</h6>
+                                                <p class="mb-0 fw-bold">@leaveRequest.RequestNumber</p>
+                                            </div>
+                                            <div class="col-md-3">
+                                                <h6 class="text-muted mb-1">Status</h6>
+                                                <span class="badge @GetStatusClass(leaveRequest.Status) fs-6">
+                                                    @leaveRequest.Status
+                                                </span>
+                                            </div>
+                                            <div class="col-md-3">
+                                                <h6 class="text-muted mb-1">Leave Type</h6>
+                                                <p class="mb-0">@leaveRequest.LeaveTypeName</p>
+                                            </div>
+                                            <div class="col-md-3">
+                                                <h6 class="text-muted mb-1">Duration</h6>
+                                                <p class="mb-0">
+                                                    @leaveRequest.DaysRequested day(s)
+                                                    @if (leaveRequest.IsHalfDay)
+                                                    {
+                                                        <small class="text-muted">(Half Day)</small>
+                                                    }
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Request Details -->
+                        <div class="row mb-4">
+                            <div class="col-md-6">
+                                <div class="card h-100">
+                                    <div class="card-header">
+                                        <h5 class="mb-0">
+                                            <i class="fas fa-calendar me-2"></i>
+                                            Leave Dates
+                                        </h5>
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="mb-3">
+                                            <h6 class="text-muted mb-1">Start Date</h6>
+                                            <p class="mb-2">
+                                                <i class="fas fa-calendar-day text-success me-2"></i>
+                                                @leaveRequest.StartDate.ToString("dddd, MMMM dd, yyyy")
+                                            </p>
+                                        </div>
+                                        <div class="mb-3">
+                                            <h6 class="text-muted mb-1">End Date</h6>
+                                            <p class="mb-2">
+                                                <i class="fas fa-calendar-day text-danger me-2"></i>
+                                                @leaveRequest.EndDate.ToString("dddd, MMMM dd, yyyy")
+                                            </p>
+                                        </div>
+                                        @if (leaveRequest.IsHalfDay)
+                                        {
+                                            <div class="mb-3">
+                                                <h6 class="text-muted mb-1">Half Day Session</h6>
+                                                <p class="mb-0">
+                                                    <i class="fas fa-clock text-info me-2"></i>
+                                                    @(leaveRequest.IsHalfDay ? "Half Day" : "Full Day")
+                                                </p>
+                                            </div>
+                                        }
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="card h-100">
+                                    <div class="card-header">
+                                        <h5 class="mb-0">
+                                            <i class="fas fa-user me-2"></i>
+                                            Employee Information
+                                        </h5>
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="mb-3">
+                                            <h6 class="text-muted mb-1">Employee</h6>
+                                            <p class="mb-2">@leaveRequest.EmployeeName</p>
+                                        </div>
+                                        <div class="mb-3">
+                                            <h6 class="text-muted mb-1">Department</h6>
+                                            <p class="mb-2">@leaveRequest.DepartmentName</p>
+                                        </div>
+                                        <div class="mb-3">
+                                            <h6 class="text-muted mb-1">Submitted On</h6>
+                                            <p class="mb-0">
+                                                <i class="fas fa-clock text-muted me-2"></i>
+                                                @leaveRequest.SubmittedAt.ToString("MMM dd, yyyy HH:mm")
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Request Reason -->
+                        <div class="row mb-4">
+                            <div class="col-12">
+                                <div class="card">
+                                    <div class="card-header">
+                                        <h5 class="mb-0">
+                                            <i class="fas fa-comment me-2"></i>
+                                            Reason for Leave
+                                        </h5>
+                                    </div>
+                                    <div class="card-body">
+                                        <p class="mb-0">@(string.IsNullOrEmpty(leaveRequest.Reason) ? "No reason provided." : leaveRequest.Reason)</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Approval Information (if applicable) -->
+                        @if (leaveRequest.Status != "Pending")
+                        {
+                            <div class="row mb-4">
+                                <div class="col-12">
+                                    <div class="card">
+                                        <div class="card-header">
+                                            <h5 class="mb-0">
+                                                <i class="fas fa-check-circle me-2"></i>
+                                                Approval Information
+                                            </h5>
+                                        </div>
+                                        <div class="card-body">
+                                            <div class="row">
+                                                <div class="col-md-6">
+                                                    <h6 class="text-muted mb-1">Reviewed By</h6>
+                                                    <p class="mb-2">@(string.IsNullOrEmpty(leaveRequest.ApproverName) ? "System" : leaveRequest.ApproverName)</p>
+                                                </div>
+                                                <div class="col-md-6">
+                                                    <h6 class="text-muted mb-1">Review Date</h6>
+                                                    <p class="mb-2">
+                                                        @if (leaveRequest.ReviewedAt.HasValue)
+                                                        {
+                                                            @leaveRequest.ReviewedAt.Value.ToString("MMM dd, yyyy HH:mm")
+                                                        }
+                                                        else
+                                                        {
+                                                            <span class="text-muted">Not yet reviewed</span>
+                                                        }
+                                                    </p>
+                                                </div>
+                                            </div>
+                                            @if (!string.IsNullOrEmpty(leaveRequest.ApproverComments))
+                                            {
+                                                <div class="mt-3">
+                                                    <h6 class="text-muted mb-1">Comments</h6>
+                                                    <div class="p-3 bg-light rounded">
+                                                        <p class="mb-0">@leaveRequest.ApproverComments</p>
+                                                    </div>
+                                                </div>
+                                            }
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+
+                        <!-- Action History -->
+                        <div class="row">
+                            <div class="col-12">
+                                <div class="card">
+                                    <div class="card-header">
+                                        <h5 class="mb-0">
+                                            <i class="fas fa-history me-2"></i>
+                                            Request Timeline
+                                        </h5>
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="timeline">
+                                            <div class="timeline-item">
+                                                <div class="timeline-marker bg-primary"></div>
+                                                <div class="timeline-content">
+                                                    <h6 class="mb-1">Request Submitted</h6>
+                                                    <p class="text-muted mb-0">@leaveRequest.SubmittedAt.ToString("MMM dd, yyyy HH:mm")</p>
+                                                </div>
+                                            </div>
+                                            @if (leaveRequest.ReviewedAt.HasValue)
+                                            {
+                                                <div class="timeline-item">
+                                                    <div class="timeline-marker @(leaveRequest.Status == "Approved" ? "bg-success" : "bg-danger")"></div>
+                                                    <div class="timeline-content">
+                                                        <h6 class="mb-1">Request @leaveRequest.Status</h6>
+                                                        <p class="text-muted mb-0">@leaveRequest.ReviewedAt.Value.ToString("MMM dd, yyyy HH:mm")</p>
+                                                    </div>
+                                                </div>
+                                            }
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Cancel Request Modal -->
+<div class="modal fade" id="cancelModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Cancel Leave Request</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to cancel this leave request?</p>
+                <div class="mb-3">
+                    <label class="form-label">Cancellation Reason</label>
+                    <textarea class="form-control" @bind="cancellationReason" rows="3" placeholder="Enter reason for cancellation..."></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-danger" @onclick="ConfirmCancelRequest" data-bs-dismiss="modal">
+                    Cancel Request
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .timeline {
+        position: relative;
+        padding-left: 30px;
+    }
+    
+    .timeline::before {
+        content: '';
+        position: absolute;
+        left: 15px;
+        top: 10px;
+        bottom: 10px;
+        width: 2px;
+        background: #dee2e6;
+    }
+    
+    .timeline-item {
+        position: relative;
+        margin-bottom: 25px;
+    }
+    
+    .timeline-marker {
+        position: absolute;
+        left: -22px;
+        top: 5px;
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        border: 2px solid #fff;
+        box-shadow: 0 0 0 2px #dee2e6;
+    }
+    
+    .timeline-content {
+        padding-left: 15px;
+    }
+</style>
+
+@code {
+    [Parameter] public int Id { get; set; }
+    
+    private LeaveRequestDto? leaveRequest;
+    private bool isLoading = true;
+    private string cancellationReason = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadLeaveRequest();
+    }
+
+    private async Task LoadLeaveRequest()
+    {
+        isLoading = true;
+        
+        try
+        {
+            var result = await LeaveService.GetLeaveRequestByIdAsync(Id);
+            if (result.IsSuccess)
+            {
+                leaveRequest = result.Data;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading leave request: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private string GetStatusClass(string status)
+    {
+        return status switch
+        {
+            "Approved" => "bg-success",
+            "Pending" => "bg-warning text-dark",
+            "Rejected" => "bg-danger",
+            "Cancelled" => "bg-secondary",
+            _ => "bg-secondary"
+        };
+    }
+
+    private void GoBack()
+    {
+        Navigation.NavigateTo("/leave/dashboard");
+    }
+
+    private void EditRequest()
+    {
+        Navigation.NavigateTo($"/leave/request/edit/{Id}");
+    }
+
+    private async Task CancelRequest()
+    {
+        await JS.InvokeVoidAsync("showModal", "cancelModal");
+    }
+
+    private async Task ConfirmCancelRequest()
+    {
+        try
+        {
+            var result = await LeaveService.CancelLeaveRequestAsync(Id, cancellationReason);
+            if (result.IsSuccess)
+            {
+                Navigation.NavigateTo("/leave/dashboard");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error cancelling request: {ex.Message}");
+        }
+    }
+}
+
+<script>
+    window.showModal = (modalId) => {
+        const modal = new bootstrap.Modal(document.getElementById(modalId));
+        modal.show();
+    };
+</script>

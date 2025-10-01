@@ -1,0 +1,88 @@
+@page "/test/users"
+@using Microsoft.AspNetCore.Identity
+@using PayFlowPro.Models.Entities
+@inject UserManager<ApplicationUser> UserManager
+
+<h3>User Test Page</h3>
+
+@if (testResult != null)
+{
+    <div class="alert @(testResult.Contains("SUCCESS") ? "alert-success" : "alert-danger")">
+        @testResult
+    </div>
+}
+
+<div class="card">
+    <div class="card-body">
+        <h5>Test Employee User</h5>
+        <button class="btn btn-primary" @onclick="TestEmployeeUser">Test john.doe@democompany.com</button>
+    </div>
+</div>
+
+<div class="card mt-3">
+    <div class="card-body">
+        <h5>Test Admin User</h5>
+        <button class="btn btn-primary" @onclick="TestAdminUser">Test admin@democompany.com</button>
+    </div>
+</div>
+
+<div class="card mt-3">
+    <div class="card-body">
+        <h5>Test HR User</h5>
+        <button class="btn btn-primary" @onclick="TestHRUser">Test hr@democompany.com</button>
+    </div>
+</div>
+
+@if (userCount.HasValue)
+{
+    <div class="alert alert-info mt-3">
+        Total users in database: @userCount
+    </div>
+}
+
+@code {
+    private string? testResult;
+    private int? userCount;
+
+    private async Task TestEmployeeUser()
+    {
+        await TestUser("john.doe@democompany.com");
+    }
+
+    private async Task TestAdminUser()
+    {
+        await TestUser("admin@democompany.com");
+    }
+
+    private async Task TestHRUser()
+    {
+        await TestUser("hr@democompany.com");
+    }
+
+    private async Task TestUser(string email)
+    {
+        try
+        {
+            var user = await UserManager.FindByEmailAsync(email);
+            userCount = UserManager.Users.Count();
+            
+            if (user == null)
+            {
+                testResult = $"FAILED: User {email} not found in database";
+            }
+            else
+            {
+                var roles = await UserManager.GetRolesAsync(user);
+                testResult = $"SUCCESS: User {email} found! " +
+                           $"Name: {user.FirstName} {user.LastName}, " +
+                           $"Active: {user.IsActive}, " +
+                           $"Email Confirmed: {user.EmailConfirmed}, " +
+                           $"Roles: {string.Join(", ", roles)}";
+            }
+        }
+        catch (Exception ex)
+        {
+            testResult = $"ERROR: {ex.Message}";
+        }
+    }
+}

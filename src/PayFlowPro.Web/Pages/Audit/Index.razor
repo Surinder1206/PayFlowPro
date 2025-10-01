@@ -1,0 +1,605 @@
+@page "/audit/logs"
+@using PayFlowPro.Models.Enums
+@inject IDbContextFactory<ApplicationDbContext> DbContextFactory
+@inject IJSRuntime JSRuntime
+
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h2 class="mb-0">
+                    <i class="fas fa-search-plus"></i> Audit Logs
+                </h2>
+                <div class="btn-group" role="group">
+                    <button class="btn btn-outline-primary" @onclick="RefreshLogs">
+                        <i class="fas fa-sync-alt"></i> Refresh
+                    </button>
+                    <button class="btn btn-outline-success" @onclick="ExportLogs">
+                        <i class="fas fa-download"></i> Export
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filters Section -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="card-title mb-0">
+                <i class="fas fa-filter"></i> Filters
+                <button class="btn btn-sm btn-outline-secondary float-end" type="button" data-bs-toggle="collapse" data-bs-target="#filterCollapse">
+                    <i class="fas fa-chevron-down"></i>
+                </button>
+            </h5>
+        </div>
+        <div class="collapse show" id="filterCollapse">
+            <div class="card-body">
+                <EditForm Model="@filterDto" OnValidSubmit="@ApplyFilters">
+                    <div class="row">
+                        <div class="col-md-3">
+                            <div class="form-group mb-3">
+                                <label class="form-label">User Email</label>
+                                <InputText @bind-Value="filterDto.UserEmail" class="form-control" placeholder="Enter user email..." />
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="form-group mb-3">
+                                <label class="form-label">Action</label>
+                                <InputText @bind-Value="filterDto.Action" class="form-control" placeholder="Enter action..." />
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="form-group mb-3">
+                                <label class="form-label">Entity Type</label>
+                                <InputText @bind-Value="filterDto.EntityType" class="form-control" placeholder="Enter entity type..." />
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="form-group mb-3">
+                                <label class="form-label">Severity</label>
+                                <InputSelect @bind-Value="filterDto.Severity" class="form-control">
+                                    <option value="">All Severities</option>
+                                    <option value="Info">Info</option>
+                                    <option value="Warning">Warning</option>
+                                    <option value="Error">Error</option>
+                                    <option value="Critical">Critical</option>
+                                    <option value="Debug">Debug</option>
+                                </InputSelect>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-3">
+                            <div class="form-group mb-3">
+                                <label class="form-label">Category</label>
+                                <InputSelect @bind-Value="filterDto.Category" class="form-control">
+                                    <option value="">All Categories</option>
+                                    <option value="General">General</option>
+                                    <option value="Data">Data</option>
+                                    <option value="Security">Security</option>
+                                    <option value="System">System</option>
+                                    <option value="Performance">Performance</option>
+                                </InputSelect>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="form-group mb-3">
+                                <label class="form-label">Start Date</label>
+                                <InputDate @bind-Value="filterDto.StartDate" class="form-control" />
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="form-group mb-3">
+                                <label class="form-label">End Date</label>
+                                <InputDate @bind-Value="filterDto.EndDate" class="form-control" />
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="form-group mb-3">
+                                <label class="form-label">IP Address</label>
+                                <InputText @bind-Value="filterDto.IpAddress" class="form-control" placeholder="Enter IP address..." />
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-12">
+                            <button type="submit" class="btn btn-primary me-2">
+                                <i class="fas fa-search"></i> Apply Filters
+                            </button>
+                            <button type="button" class="btn btn-secondary" @onclick="ClearFilters">
+                                <i class="fas fa-times"></i> Clear Filters
+                            </button>
+                        </div>
+                    </div>
+                </EditForm>
+            </div>
+        </div>
+    </div>
+
+    <!-- Summary Cards -->
+    <div class="row mb-4">
+        <div class="col-md-2">
+            <div class="card text-center border-primary">
+                <div class="card-body">
+                    <i class="fas fa-list-ul fa-2x text-primary mb-2"></i>
+                    <h5 class="card-title">@totalLogs</h5>
+                    <p class="card-text">Total Logs</p>
+                </div>
+            </div>
+            </div>
+            <div class="col-md-2">
+                <div class="card text-center border-info">
+                    <div class="card-body">
+                        <i class="fas fa-calendar-day fa-2x text-info mb-2"></i>
+                        <h5 class="card-title">@totalActions</h5>
+                        <p class="card-text">Actions</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="card text-center border-danger">
+                    <div class="card-body">
+                        <i class="fas fa-exclamation-triangle fa-2x text-danger mb-2"></i>
+                        <h5 class="card-title">0</h5>
+                        <p class="card-text">Errors</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="card text-center border-warning">
+                    <div class="card-body">
+                        <i class="fas fa-exclamation fa-2x text-warning mb-2"></i>
+                        <h5 class="card-title">0</h5>
+                        <p class="card-text">Warnings</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="card text-center border-success">
+                    <div class="card-body">
+                        <i class="fas fa-users fa-2x text-success mb-2"></i>
+                        <h5 class="card-title">@totalUsers</h5>
+                        <p class="card-text">Users</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="card text-center border-secondary">
+                    <div class="card-body">
+                        <i class="fas fa-clock fa-2x text-secondary mb-2"></i>
+                        <h5 class="card-title">Recent</h5>
+                        <p class="card-text">Last Activity</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    <!-- Audit Logs Table -->
+    <div class="card">
+        <div class="card-header">
+            <h5 class="card-title mb-0">
+                <i class="fas fa-table"></i> Audit Log Entries
+                @if (auditLogs?.Count() > 0)
+                {
+                    <small class="text-muted">(@auditLogs.Count() entries)</small>
+                }
+            </h5>
+        </div>
+        <div class="card-body">
+            @if (isLoading)
+            {
+                <div class="text-center p-4">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <p class="mt-2">Loading audit logs...</p>
+                </div>
+            }
+            else if (auditLogs?.Any() == true)
+            {
+                <div class="table-responsive">
+                    <table class="table table-striped table-hover">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Date/Time</th>
+                                <th>User</th>
+                                <th>Action</th>
+                                <th>Entity</th>
+                                <th>Severity</th>
+                                <th>Category</th>
+                                <th>IP Address</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var log in auditLogs)
+                            {
+                                <tr>
+                                    <td>
+                                        <small>@log.CreatedAt.ToString("yyyy-MM-dd HH:mm:ss")</small>
+                                    </td>
+                                    <td>
+                                        <div>
+                                            <strong>@log.UserEmail</strong>
+                                        </div>
+                                        <small class="text-muted">@log.UserId</small>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-primary">@log.Action</span>
+                                    </td>
+                                    <td>
+                                        <div>@log.EntityType</div>
+                                        @if (!string.IsNullOrEmpty(log.EntityId))
+                                        {
+                                            <small class="text-muted">ID: @log.EntityId</small>
+                                        }
+                                    </td>
+                                    <td>
+                                        <span class="badge @GetSeverityBadgeClass(log.Severity)">
+                                            @log.Severity
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-secondary">@log.Category</span>
+                                    </td>
+                                    <td>
+                                        <small>@log.IpAddress</small>
+                                    </td>
+                                    <td>
+                                        @if (log.IsSuccess)
+                                        {
+                                            <i class="fas fa-check-circle text-success" title="Success"></i>
+                                        }
+                                        else
+                                        {
+                                            <i class="fas fa-times-circle text-danger" title="Failed"></i>
+                                        }
+                                    </td>
+                                    <td>
+                                        <button class="btn btn-sm btn-outline-primary" @onclick="() => ViewLogDetails(log)">
+                                            <i class="fas fa-eye"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Pagination -->
+                <nav aria-label="Audit logs pagination">
+                    <ul class="pagination justify-content-center">
+                        <li class="page-item @(filterDto.Page <= 1 ? "disabled" : "")">
+                            <button class="page-link" @onclick="() => ChangePage(filterDto.Page - 1)" disabled="@(filterDto.Page <= 1)">
+                                Previous
+                            </button>
+                        </li>
+                        
+                        @for (int i = Math.Max(1, filterDto.Page - 2); i <= Math.Min(totalPages, filterDto.Page + 2); i++)
+                        {
+                            <li class="page-item @(i == filterDto.Page ? "active" : "")">
+                                <button class="page-link" @onclick="() => ChangePage(i)">@i</button>
+                            </li>
+                        }
+                        
+                        <li class="page-item @(filterDto.Page >= totalPages ? "disabled" : "")">
+                            <button class="page-link" @onclick="() => ChangePage(filterDto.Page + 1)" disabled="@(filterDto.Page >= totalPages)">
+                                Next
+                            </button>
+                        </li>
+                    </ul>
+                </nav>
+            }
+            else
+            {
+                <div class="text-center p-4">
+                    <i class="fas fa-inbox fa-3x text-muted mb-3"></i>
+                    <h5>No audit logs found</h5>
+                    <p class="text-muted">Try adjusting your filters or check back later.</p>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+<!-- Log Details Modal -->
+<div class="modal fade" id="logDetailsModal" tabindex="-1" aria-labelledby="logDetailsModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="logDetailsModalLabel">
+                    <i class="fas fa-info-circle"></i> Audit Log Details
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                @if (selectedLog != null)
+                {
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6>Basic Information</h6>
+                            <table class="table table-sm table-borderless">
+                                <tr>
+                                    <td><strong>Date/Time:</strong></td>
+                                    <td>@selectedLog.CreatedAt.ToString("yyyy-MM-dd HH:mm:ss UTC")</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>User:</strong></td>
+                                    <td>@selectedLog.UserEmail</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Action:</strong></td>
+                                    <td>@selectedLog.Action</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Entity:</strong></td>
+                                    <td>@selectedLog.EntityType (@selectedLog.EntityId)</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Severity:</strong></td>
+                                    <td><span class="badge @GetSeverityBadgeClass(selectedLog.Severity)">@selectedLog.Severity</span></td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Category:</strong></td>
+                                    <td>@selectedLog.Category</td>
+                                </tr>
+                            </table>
+                        </div>
+                        <div class="col-md-6">
+                            <h6>Technical Details</h6>
+                            <table class="table table-sm table-borderless">
+                                <tr>
+                                    <td><strong>IP Address:</strong></td>
+                                    <td>@selectedLog.IpAddress</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Status:</strong></td>
+                                    <td>
+                                        @if (selectedLog.IsSuccess)
+                                        {
+                                            <span class="badge bg-success">Success</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge bg-danger">Failed</span>
+                                        }
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Correlation ID:</strong></td>
+                                    <td><small>@selectedLog.CorrelationId</small></td>
+                                </tr>
+                            </table>
+                        </div>
+                    </div>
+
+                    @if (!string.IsNullOrEmpty(selectedLog.Description))
+                    {
+                        <div class="mt-3">
+                            <h6>Description</h6>
+                            <div class="alert alert-light">
+                                @selectedLog.Description
+                            </div>
+                        </div>
+                    }
+
+                    @if (!string.IsNullOrEmpty(selectedLog.OldValues))
+                    {
+                        <div class="mt-3">
+                            <h6>Old Values</h6>
+                            <pre class="bg-light p-2 border rounded"><code>@selectedLog.OldValues</code></pre>
+                        </div>
+                    }
+
+                    @if (!string.IsNullOrEmpty(selectedLog.NewValues))
+                    {
+                        <div class="mt-3">
+                            <h6>New Values</h6>
+                            <pre class="bg-light p-2 border rounded"><code>@selectedLog.NewValues</code></pre>
+                        </div>
+                    }
+
+                    @if (!string.IsNullOrEmpty(selectedLog.ErrorMessage))
+                    {
+                        <div class="mt-3">
+                            <h6>Error Message</h6>
+                            <div class="alert alert-danger">
+                                @selectedLog.ErrorMessage
+                            </div>
+                        </div>
+                    }
+
+                    @if (!string.IsNullOrEmpty(selectedLog.UserAgent))
+                    {
+                        <div class="mt-3">
+                            <h6>User Agent</h6>
+                            <small class="text-muted">@selectedLog.UserAgent</small>
+                        </div>
+                    }
+                }
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    // Filter model class for the form
+    public class FilterDto
+    {
+        public string? UserEmail { get; set; } = string.Empty;
+        public string? Action { get; set; } = string.Empty;
+        public string? EntityType { get; set; } = string.Empty;
+        public string? Severity { get; set; } = string.Empty;
+        public string? Category { get; set; } = string.Empty;
+        public DateTime? StartDate { get; set; } = DateTime.Now.Date.AddDays(-7);
+        public DateTime? EndDate { get; set; } = DateTime.Now.Date.AddDays(1);
+        public string? IpAddress { get; set; } = string.Empty;
+        public int Page { get; set; } = 1;
+        public int PageSize { get; set; } = 50;
+    }
+
+    private FilterDto filterDto = new FilterDto();
+    
+    private List<AuditLog> auditLogs = new();
+    private AuditLog? selectedLog;
+    private bool isLoading = false;
+    private int totalLogs = 0;
+    private int totalActions = 0;
+    private int totalUsers = 0;
+    private int totalPages = 1;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAuditLogs();
+        await LoadSummary();
+    }
+
+    private async Task LoadAuditLogs()
+    {
+        try
+        {
+            isLoading = true;
+            StateHasChanged();
+
+            using var context = DbContextFactory.CreateDbContext();
+            
+            var query = context.AuditLogs.AsQueryable();
+
+            // Apply filters
+            if (!string.IsNullOrEmpty(filterDto.UserEmail))
+                query = query.Where(a => a.UserEmail.Contains(filterDto.UserEmail));
+            
+            if (!string.IsNullOrEmpty(filterDto.Action))
+                query = query.Where(a => a.Action.Contains(filterDto.Action));
+            
+            if (!string.IsNullOrEmpty(filterDto.EntityType))
+                query = query.Where(a => a.EntityType.Contains(filterDto.EntityType));
+            
+            if (!string.IsNullOrEmpty(filterDto.Severity))
+                query = query.Where(a => a.Severity == filterDto.Severity);
+            
+            if (!string.IsNullOrEmpty(filterDto.Category))
+                query = query.Where(a => a.Category == filterDto.Category);
+            
+            if (filterDto.StartDate.HasValue)
+                query = query.Where(a => a.CreatedAt >= filterDto.StartDate.Value);
+            
+            if (filterDto.EndDate.HasValue)
+                query = query.Where(a => a.CreatedAt <= filterDto.EndDate.Value);
+            
+            if (!string.IsNullOrEmpty(filterDto.IpAddress))
+                query = query.Where(a => a.IpAddress.Contains(filterDto.IpAddress));
+
+            auditLogs = await query.OrderByDescending(a => a.CreatedAt).Take(100).ToListAsync();
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("alert", $"Error loading audit logs: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task LoadSummary()
+    {
+        try
+        {
+            using var context = DbContextFactory.CreateDbContext();
+            
+            var query = context.AuditLogs.AsQueryable();
+            
+            if (filterDto.StartDate.HasValue)
+                query = query.Where(a => a.CreatedAt >= filterDto.StartDate.Value);
+            
+            if (filterDto.EndDate.HasValue)
+                query = query.Where(a => a.CreatedAt <= filterDto.EndDate.Value);
+
+            totalLogs = await query.CountAsync();
+            totalActions = await query.Select(a => a.Action).Distinct().CountAsync();
+            totalUsers = await query.Select(a => a.UserEmail).Distinct().CountAsync();
+            
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading summary: {ex.Message}");
+        }
+    }
+
+    private async Task ApplyFilters()
+    {
+        await LoadAuditLogs();
+        await LoadSummary();
+    }
+
+    private async Task ClearFilters()
+    {
+        filterDto = new FilterDto
+        {
+            EndDate = DateTime.Now.Date.AddDays(1),
+            StartDate = DateTime.Now.Date.AddDays(-7),
+            Page = 1,
+            PageSize = 50
+        };
+        
+        await LoadAuditLogs();
+        await LoadSummary();
+    }
+
+    private async Task RefreshLogs()
+    {
+        await LoadAuditLogs();
+        await LoadSummary();
+    }
+
+    private async Task ExportLogs()
+    {
+        await JSRuntime.InvokeVoidAsync("alert", "Export functionality not yet implemented");
+    }
+
+    private async Task ViewLogDetails(AuditLog log)
+    {
+        selectedLog = log;
+        await JSRuntime.InvokeVoidAsync("new bootstrap.Modal(document.getElementById('logDetailsModal')).show");
+    }
+
+    private async Task ChangePage(int page)
+    {
+        if (page >= 1 && page <= totalPages && page != filterDto.Page)
+        {
+            filterDto.Page = page;
+            await LoadAuditLogs();
+        }
+    }
+
+    private string GetSeverityBadgeClass(string severity)
+    {
+        return severity.ToLower() switch
+        {
+            "critical" => "bg-danger",
+            "error" => "bg-danger",
+            "warning" => "bg-warning",
+            "info" => "bg-info",
+            "debug" => "bg-secondary",
+            _ => "bg-secondary"
+        };
+    }
+}
+
+<script>
+    window.downloadCsvFile = function (filename, base64Data) {
+        const link = document.createElement('a');
+        link.href = 'data:text/csv;base64,' + base64Data;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
+</script>

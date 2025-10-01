@@ -1,0 +1,793 @@
+@page "/payslips/approval"
+@using Microsoft.EntityFrameworkCore
+@using Microsoft.AspNetCore.Components.Authorization
+@using PayFlowPro.Core.Interfaces
+@using PayFlowPro.Data.Context
+@using PayFlowPro.Models.Entities
+@using PayFlowPro.Models.Enums
+@using PayFlowPro.Shared.DTOs.Dashboard
+@inject IDbContextFactory<ApplicationDbContext> DbContextFactory
+@inject IPayslipService PayslipService
+@inject NavigationManager Navigation
+@inject IJSRuntime JSRuntime
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@attribute [Authorize(Roles = "Admin,HR")]
+
+@* Page Title set via layout *@
+
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-md-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <div>
+                    <h2><i class="fas fa-clipboard-check"></i> Payslip Approval Workflow</h2>
+                    <p class="text-muted">Review and approve generated payslips before sending to employees</p>
+                </div>
+                <div>
+                    <button class="btn btn-success" @onclick="BulkApproveAll" disabled="@(isLoading || !pendingPayslips.Any())"
+                            title="Bulk approve all pending payslips">
+                        @if (isApproving)
+                        {
+                            <span class="spinner-border spinner-border-sm" role="status"></span>
+                            <span>Approving...</span>
+                        }
+                        else
+                        {
+                            <i class="fas fa-check-double"></i>
+                            <span>Bulk Approve All (@pendingPayslips.Count)</span>
+                        }
+                    </button>
+                    <a href="/payslips" class="btn btn-outline-secondary ms-2">
+                        <i class="fas fa-arrow-left"></i> Back to Payslips
+                    </a>
+                </div>
+            </div>
+
+            <!-- Summary Cards -->
+            <div class="row mb-4">
+                <div class="col-md-3">
+                    <div class="card bg-warning text-white">
+                        <div class="card-body text-center">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <h3 class="card-title">@pendingPayslips.Count</h3>
+                                    <p class="card-text">Pending Approval</p>
+                                </div>
+                                <div>
+                                    <i class="fas fa-hourglass-half fa-2x"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card bg-success text-white">
+                        <div class="card-body text-center">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <h3 class="card-title">@approvedTodayCount</h3>
+                                    <p class="card-text">Approved Today</p>
+                                </div>
+                                <div>
+                                    <i class="fas fa-check-circle fa-2x"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card bg-info text-white">
+                        <div class="card-body text-center">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <h3 class="card-title">@totalPendingAmount.ToString("C")</h3>
+                                    <p class="card-text">Total Pending Amount</p>
+                                </div>
+                                <div>
+                                    <i class="fas fa-dollar-sign fa-2x"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card bg-primary text-white">
+                        <div class="card-body text-center">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <h3 class="card-title">@departmentCount</h3>
+                                    <p class="card-text">Departments Affected</p>
+                                </div>
+                                <div>
+                                    <i class="fas fa-building fa-2x"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            @if (!string.IsNullOrEmpty(errorMessage))
+            {
+                <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                    <i class="fas fa-exclamation-circle"></i> @errorMessage
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            }
+
+            @if (!string.IsNullOrEmpty(successMessage))
+            {
+                <div class="alert alert-success alert-dismissible fade show" role="alert">
+                    <i class="fas fa-check-circle"></i> @successMessage
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            }
+
+            <!-- Filters -->
+            <div class="card mb-4">
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-3">
+                            <div class="form-group">
+                                <label for="departmentFilter">Department</label>
+                                <select class="form-control" id="departmentFilter" value="@selectedDepartmentId" @onchange="@((e) => { selectedDepartmentId = e.Value?.ToString() ?? ""; OnFiltersChanged(); })">
+                                    <option value="">All Departments</option>
+                                    @foreach (var dept in departments)
+                                    {
+                                        <option value="@dept.Id">@dept.Name</option>
+                                    }
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="form-group">
+                                <label for="payPeriodFilter">Pay Period</label>
+                                <input type="month" class="form-control" id="payPeriodFilter" value="@selectedPayPeriod" @onchange="@((e) => { selectedPayPeriod = e.Value?.ToString() ?? ""; OnFiltersChanged(); })" />
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="form-group">
+                                <label for="amountRange">Salary Range</label>
+                                <select class="form-control" id="amountRange" value="@selectedAmountRange" @onchange="@((e) => { selectedAmountRange = e.Value?.ToString() ?? ""; OnFiltersChanged(); })">
+                                    <option value="">All Amounts</option>
+                                    <option value="0-50000">Up to $50,000</option>
+                                    <option value="50000-100000">$50,000 - $100,000</option>
+                                    <option value="100000-999999999">Above $100,000</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="form-group">
+                                <label>&nbsp;</label>
+                                <div>
+                                    <button class="btn btn-secondary w-100" @onclick="ResetFilters">
+                                        <i class="fas fa-undo"></i> Reset Filters
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Pending Payslips for Approval -->
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">
+                        <i class="fas fa-clock"></i> Pending Payslips for Approval
+                        <span class="badge bg-warning text-dark ms-2">@filteredPayslips.Count</span>
+                    </h5>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" checked="@selectAll" @onchange="@((e) => { selectAll = (bool)(e.Value ?? false); ToggleSelectAll(); })" id="selectAllCheckbox">
+                        <label class="form-check-label" for="selectAllCheckbox">
+                            Select All Visible
+                        </label>
+                    </div>
+                </div>
+                <div class="card-body">
+                    @if (isLoading)
+                    {
+                        <div class="text-center py-5">
+                            <div class="spinner-border" role="status">
+                                <span class="sr-only">Loading payslips...</span>
+                            </div>
+                            <p class="mt-2">Loading pending payslips for approval...</p>
+                        </div>
+                    }
+                    else if (filteredPayslips.Any())
+                    {
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead class="table-dark">
+                                    <tr>
+                                        <th width="50">
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" checked="@selectAll" @onchange="@((e) => { selectAll = (bool)(e.Value ?? false); ToggleSelectAll(); })" id="headerSelectAll">
+                                            </div>
+                                        </th>
+                                        <th>Employee</th>
+                                        <th>Department</th>
+                                        <th>Pay Period</th>
+                                        <th>Gross Salary</th>
+                                        <th>Net Salary</th>
+                                        <th>Generated By</th>
+                                        <th>Generated On</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var payslip in filteredPayslips)
+                                    {
+                                        <tr class="@(selectedPayslipIds.Contains(payslip.Id) ? "table-active" : "")">
+                                            <td>
+                                                <div class="form-check">
+                                                    <input class="form-check-input" type="checkbox" 
+                                                           checked="@(selectedPayslipIds.Contains(payslip.Id))"
+                                                           @onchange="@((ChangeEventArgs e) => TogglePayslipSelection(payslip.Id, e.Value != null && (bool)e.Value))" 
+                                                           id="payslip-@payslip.Id">
+                                                </div>
+                                            </td>
+                                            <td>
+                                                <div class="d-flex align-items-center">
+                                                    <div>
+                                                        <strong>@payslip.Employee.FirstName @payslip.Employee.LastName</strong><br>
+                                                        <small class="text-muted">@payslip.Employee.EmployeeCode</small>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td>@payslip.Employee.Department?.Name</td>
+                                            <td>
+                                                <small>
+                                                    @payslip.PayPeriodStart.ToString("MMM dd") - @payslip.PayPeriodEnd.ToString("MMM dd, yyyy")
+                                                </small>
+                                            </td>
+                                            <td>
+                                                <strong>@payslip.GrossSalary.ToString("C")</strong>
+                                            </td>
+                                            <td>
+                                                <strong class="text-success">@payslip.NetSalary.ToString("C")</strong>
+                                            </td>
+                                            <td>
+                                                <small>@payslip.GeneratedBy</small>
+                                            </td>
+                                            <td>
+                                                <small>@payslip.CreatedAt.ToString("MMM dd, yyyy HH:mm")</small>
+                                            </td>
+                                            <td>
+                                                <div class="btn-group btn-group-sm">
+                                                    <button class="btn btn-outline-primary" @onclick="() => ViewPayslipDetails(payslip.Id)" title="View Details">
+                                                        <i class="fas fa-eye"></i>
+                                                    </button>
+                                                    <button class="btn btn-success" @onclick="() => ApprovePayslip(payslip.Id)" title="Approve" disabled="@isApproving">
+                                                        <i class="fas fa-check"></i>
+                                                    </button>
+                                                    <button class="btn btn-outline-danger" @onclick="() => RejectPayslip(payslip.Id)" title="Reject" disabled="@isApproving">
+                                                        <i class="fas fa-times"></i>
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <!-- Bulk Actions -->
+                        @if (selectedPayslipIds.Any())
+                        {
+                            <div class="mt-3 p-3 bg-light rounded">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <strong>@selectedPayslipIds.Count payslip(s) selected</strong>
+                                        <span class="ms-2 text-muted">
+                                            Total: @GetSelectedPayslipsTotalAmount().ToString("C")
+                                        </span>
+                                    </div>
+                                    <div>
+                                        <button class="btn btn-success me-2" @onclick="BulkApproveSelected" disabled="@isApproving">
+                                            @if (isApproving)
+                                            {
+                                                <span class="spinner-border spinner-border-sm" role="status"></span>
+                                            }
+                                            else
+                                            {
+                                                <i class="fas fa-check"></i>
+                                            }
+                                            Approve Selected
+                                        </button>
+                                        <button class="btn btn-outline-danger me-2" @onclick="BulkRejectSelected" disabled="@isApproving">
+                                            <i class="fas fa-times"></i> Reject Selected
+                                        </button>
+                                        <button class="btn btn-outline-secondary" @onclick="ClearSelection">
+                                            <i class="fas fa-times"></i> Clear Selection
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    }
+                    else
+                    {
+                        <div class="text-center py-5">
+                            <div class="mb-3">
+                                <i class="fas fa-check-circle fa-3x text-success"></i>
+                            </div>
+                            <h4>No Pending Payslips</h4>
+                            <p class="text-muted">All payslips have been reviewed and approved.</p>
+                            <a href="/payslips" class="btn btn-primary">
+                                <i class="fas fa-list"></i> View All Payslips
+                            </a>
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <!-- Recent Approval Activity -->
+            @if (recentApprovals.Any())
+            {
+                <div class="card mt-4">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i class="fas fa-history"></i> Recent Approval Activity
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="timeline">
+                            @foreach (var approval in recentApprovals.Take(10))
+                            {
+                                <div class="timeline-item">
+                                    <div class="timeline-marker bg-success">
+                                        <i class="fas fa-check text-white"></i>
+                                    </div>
+                                    <div class="timeline-content">
+                                        <h6 class="timeline-title">@approval.Employee.FirstName @approval.Employee.LastName</h6>
+                                        <p class="timeline-text">
+                                            Payslip for @approval.PayPeriodStart.ToString("MMM yyyy") approved by @approval.ApprovedBy
+                                            <br><small class="text-muted">@approval.ApprovedAt?.ToString("MMM dd, yyyy HH:mm")</small>
+                                        </p>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+<style>
+.timeline {
+    position: relative;
+    padding-left: 30px;
+}
+
+.timeline-item {
+    position: relative;
+    margin-bottom: 20px;
+}
+
+.timeline-marker {
+    position: absolute;
+    left: -35px;
+    top: 0;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.timeline-content {
+    background: #f8f9fa;
+    padding: 15px;
+    border-radius: 5px;
+    border-left: 3px solid #28a745;
+}
+
+.timeline-title {
+    margin-bottom: 5px;
+    font-weight: 600;
+}
+
+.timeline-text {
+    margin-bottom: 0;
+    color: #6c757d;
+}
+</style>
+
+@code {
+    private List<Payslip> pendingPayslips = new();
+    private List<Payslip> filteredPayslips = new();
+    private List<Payslip> recentApprovals = new();
+    private List<Department> departments = new();
+    
+    private HashSet<int> selectedPayslipIds = new();
+    private bool selectAll = false;
+    
+    private string selectedDepartmentId = "";
+    private string selectedPayPeriod = "";
+    private string selectedAmountRange = "";
+    
+    private int approvedTodayCount = 0;
+    private decimal totalPendingAmount = 0;
+    private int departmentCount = 0;
+    
+    private bool isLoading = true;
+    private bool isApproving = false;
+    private string? errorMessage = null;
+    private string? successMessage = null;
+    
+    private string currentUserId = "";
+    private string currentUserName = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await GetCurrentUser();
+        await LoadData();
+    }
+
+    private async Task GetCurrentUser()
+    {
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        currentUserId = authState.User?.FindFirst("sub")?.Value 
+                     ?? authState.User?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
+                     ?? "system";
+        currentUserName = authState.User?.FindFirst(System.Security.Claims.ClaimTypes.Name)?.Value
+                       ?? authState.User?.FindFirst("name")?.Value 
+                       ?? "Unknown User";
+    }
+
+    private async Task LoadData()
+    {
+        try
+        {
+            isLoading = true;
+            errorMessage = null;
+
+            using var context = await DbContextFactory.CreateDbContextAsync();
+            
+            // Load pending payslips (Generated status)
+            pendingPayslips = await context.Payslips
+                .Include(p => p.Employee)
+                .ThenInclude(e => e.Department)
+                .Where(p => p.Status == PayslipStatus.Generated)
+                .OrderBy(p => p.PayPeriodStart)
+                .ThenBy(p => p.Employee.FirstName)
+                .ToListAsync();
+
+            // Load recent approvals (last 24 hours)
+            var yesterday = DateTime.UtcNow.AddDays(-1);
+            recentApprovals = await context.Payslips
+                .Include(p => p.Employee)
+                .Where(p => p.Status == PayslipStatus.Approved && p.ApprovedAt >= yesterday)
+                .OrderByDescending(p => p.ApprovedAt)
+                .Take(20)
+                .ToListAsync();
+
+            // Load departments
+            departments = await context.Departments
+                .Where(d => d.IsActive)
+                .OrderBy(d => d.Name)
+                .ToListAsync();
+
+            // Calculate statistics
+            approvedTodayCount = await context.Payslips
+                .Where(p => p.Status == PayslipStatus.Approved && p.ApprovedAt.HasValue && p.ApprovedAt.Value.Date == DateTime.UtcNow.Date)
+                .CountAsync();
+
+            totalPendingAmount = pendingPayslips.Sum(p => p.NetSalary);
+            departmentCount = pendingPayslips.Select(p => p.Employee.DepartmentId).Distinct().Count();
+
+            ApplyFilters();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Failed to load approval data: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private void ApplyFilters()
+    {
+        filteredPayslips = pendingPayslips.Where(p =>
+        {
+            // Department filter
+            if (!string.IsNullOrEmpty(selectedDepartmentId) && 
+                int.TryParse(selectedDepartmentId, out var deptId) &&
+                p.Employee.DepartmentId != deptId)
+                return false;
+
+            // Pay period filter
+            if (!string.IsNullOrEmpty(selectedPayPeriod) &&
+                DateTime.TryParse(selectedPayPeriod + "-01", out var filterDate))
+            {
+                if (p.PayPeriodStart.Year != filterDate.Year || p.PayPeriodStart.Month != filterDate.Month)
+                    return false;
+            }
+
+            // Amount range filter
+            if (!string.IsNullOrEmpty(selectedAmountRange))
+            {
+                var parts = selectedAmountRange.Split('-');
+                if (parts.Length == 2 &&
+                    decimal.TryParse(parts[0], out var minAmount) &&
+                    decimal.TryParse(parts[1], out var maxAmount))
+                {
+                    if (p.NetSalary < minAmount || p.NetSalary > maxAmount)
+                        return false;
+                }
+            }
+
+            return true;
+        }).ToList();
+
+        // Clear selections if filtered items are no longer visible
+        selectedPayslipIds = selectedPayslipIds.Where(id => filteredPayslips.Any(p => p.Id == id)).ToHashSet();
+        selectAll = filteredPayslips.Any() && selectedPayslipIds.Count == filteredPayslips.Count;
+        
+        StateHasChanged();
+    }
+
+    private void OnFiltersChanged()
+    {
+        ApplyFilters();
+    }
+
+    private void ResetFilters()
+    {
+        selectedDepartmentId = "";
+        selectedPayPeriod = "";
+        selectedAmountRange = "";
+        ApplyFilters();
+    }
+
+    private void ToggleSelectAll()
+    {
+        if (selectAll)
+        {
+            selectedPayslipIds = filteredPayslips.Select(p => p.Id).ToHashSet();
+        }
+        else
+        {
+            selectedPayslipIds.Clear();
+        }
+        StateHasChanged();
+    }
+
+    private void TogglePayslipSelection(int payslipId, bool selected)
+    {
+        if (selected)
+        {
+            selectedPayslipIds.Add(payslipId);
+        }
+        else
+        {
+            selectedPayslipIds.Remove(payslipId);
+        }
+        
+        selectAll = filteredPayslips.Any() && selectedPayslipIds.Count == filteredPayslips.Count;
+        StateHasChanged();
+    }
+
+    private decimal GetSelectedPayslipsTotalAmount()
+    {
+        return filteredPayslips.Where(p => selectedPayslipIds.Contains(p.Id)).Sum(p => p.NetSalary);
+    }
+
+    private void ClearSelection()
+    {
+        selectedPayslipIds.Clear();
+        selectAll = false;
+        StateHasChanged();
+    }
+
+    private async Task ViewPayslipDetails(int payslipId)
+    {
+        Navigation.NavigateTo($"/payslips/{payslipId}");
+    }
+
+    private async Task ApprovePayslip(int payslipId)
+    {
+        try
+        {
+            isApproving = true;
+            errorMessage = null;
+            
+            await PayslipService.ApprovePayslipAsync(payslipId, currentUserId);
+            
+            successMessage = "Payslip approved successfully!";
+            await LoadData();
+            
+            // Auto-clear success message
+            await Task.Delay(3000);
+            successMessage = null;
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Failed to approve payslip: {ex.Message}";
+        }
+        finally
+        {
+            isApproving = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task RejectPayslip(int payslipId)
+    {
+        var confirm = await JSRuntime.InvokeAsync<bool>("confirm", "Are you sure you want to reject this payslip? This will change its status back to Draft.");
+        if (confirm)
+        {
+            try
+            {
+                isApproving = true;
+                errorMessage = null;
+                
+                using var context = await DbContextFactory.CreateDbContextAsync();
+                var payslip = await context.Payslips.FindAsync(payslipId);
+                
+                if (payslip != null)
+                {
+                    payslip.Status = PayslipStatus.Draft;
+                    payslip.ApprovedAt = null;
+                    payslip.ApprovedBy = null;
+                    
+                    await context.SaveChangesAsync();
+                    
+                    successMessage = "Payslip rejected and moved back to Draft status.";
+                    await LoadData();
+                    
+                    // Auto-clear success message
+                    await Task.Delay(3000);
+                    successMessage = null;
+                    StateHasChanged();
+                }
+            }
+            catch (Exception ex)
+            {
+                errorMessage = $"Failed to reject payslip: {ex.Message}";
+            }
+            finally
+            {
+                isApproving = false;
+                StateHasChanged();
+            }
+        }
+    }
+
+    private async Task BulkApproveSelected()
+    {
+        if (!selectedPayslipIds.Any()) return;
+
+        var confirm = await JSRuntime.InvokeAsync<bool>("confirm", 
+            $"Are you sure you want to approve {selectedPayslipIds.Count} selected payslip(s)?");
+        if (confirm)
+        {
+            await BulkApprove(selectedPayslipIds.ToList());
+        }
+    }
+
+    private async Task BulkApproveAll()
+    {
+        if (!pendingPayslips.Any()) return;
+
+        var confirm = await JSRuntime.InvokeAsync<bool>("confirm", 
+            $"Are you sure you want to approve ALL {pendingPayslips.Count} pending payslip(s)?");
+        if (confirm)
+        {
+            await BulkApprove(pendingPayslips.Select(p => p.Id).ToList());
+        }
+    }
+
+    private async Task BulkApprove(List<int> payslipIds)
+    {
+        try
+        {
+            isApproving = true;
+            errorMessage = null;
+
+            var approvedCount = 0;
+            var failedCount = 0;
+
+            foreach (var payslipId in payslipIds)
+            {
+                try
+                {
+                    await PayslipService.ApprovePayslipAsync(payslipId, currentUserId);
+                    approvedCount++;
+                }
+                catch
+                {
+                    failedCount++;
+                }
+            }
+
+            if (approvedCount > 0)
+            {
+                successMessage = $"Successfully approved {approvedCount} payslip(s).";
+                if (failedCount > 0)
+                {
+                    successMessage += $" {failedCount} failed to approve.";
+                }
+            }
+            else
+            {
+                errorMessage = "Failed to approve any payslips.";
+            }
+
+            selectedPayslipIds.Clear();
+            selectAll = false;
+            await LoadData();
+            
+            // Auto-clear success message
+            await Task.Delay(3000);
+            successMessage = null;
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Bulk approval failed: {ex.Message}";
+        }
+        finally
+        {
+            isApproving = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task BulkRejectSelected()
+    {
+        if (!selectedPayslipIds.Any()) return;
+
+        var confirm = await JSRuntime.InvokeAsync<bool>("confirm", 
+            $"Are you sure you want to reject {selectedPayslipIds.Count} selected payslip(s)? They will be moved back to Draft status.");
+        if (confirm)
+        {
+            try
+            {
+                isApproving = true;
+                errorMessage = null;
+
+                using var context = await DbContextFactory.CreateDbContextAsync();
+                var payslipsToReject = await context.Payslips
+                    .Where(p => selectedPayslipIds.Contains(p.Id))
+                    .ToListAsync();
+
+                foreach (var payslip in payslipsToReject)
+                {
+                    payslip.Status = PayslipStatus.Draft;
+                    payslip.ApprovedAt = null;
+                    payslip.ApprovedBy = null;
+                }
+
+                await context.SaveChangesAsync();
+
+                successMessage = $"Successfully rejected {payslipsToReject.Count} payslip(s).";
+                selectedPayslipIds.Clear();
+                selectAll = false;
+                await LoadData();
+                
+                // Auto-clear success message
+                await Task.Delay(3000);
+                successMessage = null;
+                StateHasChanged();
+            }
+            catch (Exception ex)
+            {
+                errorMessage = $"Bulk rejection failed: {ex.Message}";
+            }
+            finally
+            {
+                isApproving = false;
+                StateHasChanged();
+            }
+        }
+    }
+}

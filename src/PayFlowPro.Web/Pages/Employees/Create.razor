@@ -1,0 +1,405 @@
+@page "/employees/create"
+@using Microsoft.EntityFrameworkCore
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.AspNetCore.Components.Forms
+@using PayFlowPro.Core.Interfaces
+@using PayFlowPro.Data.Context
+@using PayFlowPro.Models.Entities
+@using PayFlowPro.Models.Enums
+@using PayFlowPro.Shared.DTOs.Employee
+@using System.ComponentModel.DataAnnotations
+@inject IDbContextFactory<ApplicationDbContext> DbContextFactory
+@inject IEmployeeService EmployeeService
+@inject NavigationManager Navigation
+@inject IJSRuntime JSRuntime
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@attribute [Authorize(Roles = "Admin,HR")]
+
+@* Page Title set via layout *@
+
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-md-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <div>
+                    <h2><i class="fas fa-user-plus"></i> Add New Employee</h2>
+                    <p class="text-muted">Create a new employee profile with complete details</p>
+                </div>
+                <a href="/employees" class="btn btn-outline-secondary">
+                    <i class="fas fa-arrow-left"></i> Back to Employees
+                </a>
+            </div>
+
+            @if (!string.IsNullOrEmpty(errorMessage))
+            {
+                <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                    <i class="fas fa-exclamation-circle"></i> @errorMessage
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            }
+
+            @if (!string.IsNullOrEmpty(successMessage))
+            {
+                <div class="alert alert-success alert-dismissible fade show" role="alert">
+                    <i class="fas fa-check-circle"></i> @successMessage
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            }
+
+            <div class="card shadow">
+                <div class="card-body">
+                    <EditForm Model="@employeeDto" OnValidSubmit="@HandleValidSubmit">
+                        <DataAnnotationsValidator />
+                        
+                        <div class="row">
+                            <!-- Personal Information -->
+                            <div class="col-lg-8">
+                                <h5 class="mb-3 text-primary">
+                                    <i class="fas fa-user"></i> Personal Information
+                                </h5>
+                                
+                                <div class="row">
+                                    <div class="col-md-6 mb-3">
+                                        <label class="form-label">First Name <span class="text-danger">*</span></label>
+                                        <InputText @bind-Value="employeeDto.FirstName" class="form-control" />
+                                        <ValidationMessage For="@(() => employeeDto.FirstName)" class="text-danger" />
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        <label class="form-label">Last Name <span class="text-danger">*</span></label>
+                                        <InputText @bind-Value="employeeDto.LastName" class="form-control" />
+                                        <ValidationMessage For="@(() => employeeDto.LastName)" class="text-danger" />
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        <label class="form-label">Email <span class="text-danger">*</span></label>
+                                        <InputText @bind-Value="employeeDto.Email" class="form-control" type="email" />
+                                        <ValidationMessage For="@(() => employeeDto.Email)" class="text-danger" />
+                                        <div class="form-text">This will be used for login if user account is created</div>
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        <label class="form-label">Phone Number</label>
+                                        <InputText @bind-Value="employeeDto.PhoneNumber" class="form-control" />
+                                        <ValidationMessage For="@(() => employeeDto.PhoneNumber)" class="text-danger" />
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        <label class="form-label">Date of Birth <span class="text-danger">*</span></label>
+                                        <InputDate @bind-Value="employeeDto.DateOfBirth" class="form-control" />
+                                        <ValidationMessage For="@(() => employeeDto.DateOfBirth)" class="text-danger" />
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        <label class="form-label">Gender <span class="text-danger">*</span></label>
+                                        <InputSelect @bind-Value="employeeDto.Gender" class="form-select">
+                                            <option value="">Select Gender</option>
+                                            <option value="@Gender.Male">Male</option>
+                                            <option value="@Gender.Female">Female</option>
+                                        </InputSelect>
+                                        <ValidationMessage For="@(() => employeeDto.Gender)" class="text-danger" />
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        <label class="form-label">Marital Status <span class="text-danger">*</span></label>
+                                        <InputSelect @bind-Value="employeeDto.MaritalStatus" class="form-select">
+                                            <option value="">Select Status</option>
+                                            <option value="@MaritalStatus.Single">Single</option>
+                                            <option value="@MaritalStatus.Married">Married</option>
+                                            <option value="@MaritalStatus.Divorced">Divorced</option>
+                                            <option value="@MaritalStatus.Widowed">Widowed</option>
+                                        </InputSelect>
+                                        <ValidationMessage For="@(() => employeeDto.MaritalStatus)" class="text-danger" />
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        <label class="form-label">Date of Joining <span class="text-danger">*</span></label>
+                                        <InputDate @bind-Value="employeeDto.DateOfJoining" class="form-control" />
+                                        <ValidationMessage For="@(() => employeeDto.DateOfJoining)" class="text-danger" />
+                                    </div>
+                                </div>
+
+                                <h5 class="mb-3 text-primary mt-4">
+                                    <i class="fas fa-briefcase"></i> Employment Information
+                                </h5>
+                                
+                                <div class="row">
+                                    <div class="col-md-6 mb-3">
+                                        <label class="form-label">Job Title <span class="text-danger">*</span></label>
+                                        <InputText @bind-Value="employeeDto.JobTitle" class="form-control" />
+                                        <ValidationMessage For="@(() => employeeDto.JobTitle)" class="text-danger" />
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        <label class="form-label">Department <span class="text-danger">*</span></label>
+                                        <InputSelect @bind-Value="employeeDto.DepartmentId" class="form-select">
+                                            <option value="0" disabled>-- Please select a department --</option>
+                                            @foreach (var dept in departments)
+                                            {
+                                                <option value="@dept.Id">@dept.Name</option>
+                                            }
+                                        </InputSelect>
+                                        <ValidationMessage For="@(() => employeeDto.DepartmentId)" class="text-danger" />
+                                        @if (departments.Count == 0)
+                                        {
+                                            <small class="text-muted">No active departments available. Please contact your administrator.</small>
+                                        }
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        <label class="form-label">Basic Salary <span class="text-danger">*</span></label>
+                                        <InputNumber @bind-Value="employeeDto.BasicSalary" class="form-control" step="0.01" />
+                                        <ValidationMessage For="@(() => employeeDto.BasicSalary)" class="text-danger" />
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        <label class="form-label">Company</label>
+                                        <InputSelect @bind-Value="employeeDto.CompanyId" class="form-select">
+                                            @foreach (var company in companies)
+                                            {
+                                                <option value="@company.Id" selected="@(company.Id == selectedCompanyId)">@company.Name</option>
+                                            }
+                                        </InputSelect>
+                                        <ValidationMessage For="@(() => employeeDto.CompanyId)" class="text-danger" />
+                                    </div>
+                                </div>
+
+                                <h5 class="mb-3 text-primary mt-4">
+                                    <i class="fas fa-address-card"></i> Additional Details
+                                </h5>
+                                
+                                <div class="row">
+                                    <div class="col-md-12 mb-3">
+                                        <label class="form-label">Address</label>
+                                        <InputTextArea @bind-Value="employeeDto.Address" class="form-control" rows="3" />
+                                        <ValidationMessage For="@(() => employeeDto.Address)" class="text-danger" />
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        <label class="form-label">National ID</label>
+                                        <InputText @bind-Value="employeeDto.NationalId" class="form-control" />
+                                        <ValidationMessage For="@(() => employeeDto.NationalId)" class="text-danger" />
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        <label class="form-label">Tax ID</label>
+                                        <InputText @bind-Value="employeeDto.TaxId" class="form-control" />
+                                        <ValidationMessage For="@(() => employeeDto.TaxId)" class="text-danger" />
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        <label class="form-label">Bank Account Number</label>
+                                        <InputText @bind-Value="employeeDto.BankAccountNumber" class="form-control" />
+                                        <ValidationMessage For="@(() => employeeDto.BankAccountNumber)" class="text-danger" />
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        <label class="form-label">Bank Name</label>
+                                        <InputText @bind-Value="employeeDto.BankName" class="form-control" />
+                                        <ValidationMessage For="@(() => employeeDto.BankName)" class="text-danger" />
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Sidebar Information -->
+                            <div class="col-lg-4">
+                                <div class="card bg-light h-100">
+                                    <div class="card-header">
+                                        <h6 class="mb-0"><i class="fas fa-info-circle"></i> Quick Guide</h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="mb-4">
+                                            <h6 class="text-primary">Required Fields</h6>
+                                            <ul class="list-unstyled small">
+                                                <li><i class="fas fa-check text-success"></i> First & Last Name</li>
+                                                <li><i class="fas fa-check text-success"></i> Email Address</li>
+                                                <li><i class="fas fa-check text-success"></i> Date of Birth</li>
+                                                <li><i class="fas fa-check text-success"></i> Gender & Marital Status</li>
+                                                <li><i class="fas fa-check text-success"></i> Job Title & Department</li>
+                                                <li><i class="fas fa-check text-success"></i> Basic Salary</li>
+                                                <li><i class="fas fa-check text-success"></i> Date of Joining</li>
+                                            </ul>
+                                        </div>
+
+                                        <div class="mb-4">
+                                            <h6 class="text-primary">User Account Settings</h6>
+                                            <div class="form-check mb-2">
+                                                <InputCheckbox @bind-Value="employeeDto.CreateUserAccount" class="form-check-input" id="createAccount" />
+                                                <label class="form-check-label" for="createAccount">
+                                                    Create user account
+                                                </label>
+                                            </div>
+                                            
+                                            @if (employeeDto.CreateUserAccount)
+                                            {
+                                                <div class="mt-2">
+                                                    <label class="form-label">Role</label>
+                                                    <InputSelect @bind-Value="employeeDto.UserRole" class="form-select form-select-sm">
+                                                        <option value="Employee">Employee</option>
+                                                        <option value="Manager">Manager</option>
+                                                        <option value="HR">HR</option>
+                                                        <option value="Admin">Admin</option>
+                                                    </InputSelect>
+                                                </div>
+                                                <div class="mt-2">
+                                                    <label class="form-label">Temporary Password</label>
+                                                    <InputText @bind-Value="employeeDto.TemporaryPassword" class="form-control form-control-sm" placeholder="Leave empty for auto-generated" />
+                                                    <div class="form-text">If empty, a secure password will be generated</div>
+                                                </div>
+                                            }
+                                        </div>
+
+                                        <div class="mb-3">
+                                            <h6 class="text-primary">Automatic Fields</h6>
+                                            <ul class="list-unstyled small">
+                                                <li><i class="fas fa-magic text-info"></i> Employee Code (Auto-generated)</li>
+                                                <li><i class="fas fa-magic text-info"></i> Status (Active by default)</li>
+                                                <li><i class="fas fa-magic text-info"></i> Creation Timestamp</li>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <hr class="my-4" />
+
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div class="text-muted">
+                                <small><i class="fas fa-info-circle"></i> All fields marked with <span class="text-danger">*</span> are required</small>
+                            </div>
+                            <div>
+                                <button type="button" class="btn btn-outline-secondary me-2" @onclick="@(() => Navigation.NavigateTo("/employees"))">
+                                    <i class="fas fa-times"></i> Cancel
+                                </button>
+                                <button type="submit" class="btn btn-primary" disabled="@isLoading">
+                                    @if (isLoading)
+                                    {
+                                        <span class="spinner-border spinner-border-sm" role="status"></span>
+                                        <span>Creating...</span>
+                                    }
+                                    else
+                                    {
+                                        <i class="fas fa-save"></i>
+                                        <span>Create Employee</span>
+                                    }
+                                </button>
+                            </div>
+                        </div>
+                    </EditForm>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private CreateEmployeeDto employeeDto = new()
+    {
+        DateOfJoining = DateTime.Today,
+        DateOfBirth = DateTime.Today.AddYears(-25), // Default to 25 years old
+        CreateUserAccount = true,
+        UserRole = "Employee"
+    };
+
+    private List<Department> departments = new();
+    private List<Company> companies = new();
+    private int selectedCompanyId = 1; // Default company
+    
+    private bool isLoading = false;
+    private string? errorMessage = null;
+    private string? successMessage = null;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDropdownData();
+        
+        // Set default company
+        if (companies.Any())
+        {
+            selectedCompanyId = companies.First().Id;
+            employeeDto.CompanyId = selectedCompanyId;
+        }
+    }
+
+    private async Task LoadDropdownData()
+    {
+        try
+        {
+            using var dbContext = await DbContextFactory.CreateDbContextAsync();
+            
+            // Load departments
+            departments = await dbContext.Departments
+                .Where(d => d.IsActive)
+                .OrderBy(d => d.Name)
+                .ToListAsync();
+
+            // Load companies
+            companies = await dbContext.Companies
+                .Where(c => c.IsActive)
+                .OrderBy(c => c.Name)
+                .ToListAsync();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = "Failed to load form data. Please refresh the page and try again.";
+        }
+    }
+
+    private async Task HandleValidSubmit()
+    {
+        try
+        {
+            isLoading = true;
+            errorMessage = null;
+            successMessage = null;
+
+            // Validate required selections
+            if (employeeDto.DepartmentId <= 0)
+            {
+                errorMessage = "Please select a department for the employee.";
+                return;
+            }
+
+            if (employeeDto.CompanyId <= 0)
+            {
+                errorMessage = "Please select a company for the employee.";
+                return;
+            }
+
+            // Get current user for audit trail
+            var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+            var currentUserId = authState.User?.FindFirst("sub")?.Value 
+                             ?? authState.User?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
+                             ?? "system";
+
+            // Check if email is already taken
+            if (!await EmployeeService.IsEmailAvailableAsync(employeeDto.Email))
+            {
+                errorMessage = "An employee with this email address already exists.";
+                return;
+            }
+
+            // Create employee
+            var createdEmployee = await EmployeeService.CreateEmployeeAsync(employeeDto, currentUserId);
+            
+            successMessage = $"Employee {createdEmployee.FullName} ({createdEmployee.EmployeeCode}) created successfully!";
+            
+            // Show success message and redirect after a delay
+            StateHasChanged();
+            await Task.Delay(2000);
+            
+            Navigation.NavigateTo($"/employees/{createdEmployee.Id}");
+        }
+        catch (Exception ex)
+        {
+            if (ex.Message.Contains("FK_Employees_Departments_DepartmentId"))
+            {
+                errorMessage = "The selected department is no longer available. Please refresh the page and select a valid department.";
+            }
+            else if (ex.Message.Contains("FK_Employees_Companies_CompanyId"))
+            {
+                errorMessage = "The selected company is no longer available. Please refresh the page and select a valid company.";
+            }
+            else if (ex.Message.Contains("UNIQUE constraint") || ex.Message.Contains("duplicate key"))
+            {
+                errorMessage = "An employee with this email address or employee code already exists.";
+            }
+            else
+            {
+                errorMessage = $"Failed to create employee. Please check all fields and try again. Error: {ex.Message}";
+            }
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+}

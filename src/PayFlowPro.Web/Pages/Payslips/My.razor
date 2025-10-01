@@ -1,0 +1,307 @@
+@page "/payslips/my"
+@using Microsoft.EntityFrameworkCore
+@using PayFlowPro.Data.Context
+@using PayFlowPro.Models.Entities
+@using PayFlowPro.Models.Enums
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Identity
+@using System.Security.Claims
+@inject IDbContextFactory<ApplicationDbContext> DbContextFactory
+@inject UserManager<ApplicationUser> UserManager
+@inject NavigationManager Navigation
+@inject IJSRuntime JSRuntime
+@inject IHttpContextAccessor HttpContextAccessor
+@attribute [Authorize(Roles = "Employee")]
+
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h3 mb-0">
+                <i class="fas fa-file-invoice text-primary me-2"></i>
+                My Payslips
+            </h1>
+            <p class="text-muted">View and download your payslips</p>
+        </div>
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="d-flex justify-content-center align-items-center" style="height: 300px;">
+            <div class="text-center">
+                <div class="spinner-border text-primary mb-3" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <p class="text-muted">Loading your payslips...</p>
+            </div>
+        </div>
+    }
+    else if (!isEmployeeLinked)
+    {
+        <div class="alert alert-warning">
+            <h4><i class="fas fa-exclamation-triangle"></i> Employee Profile Not Found</h4>
+            <p>Your user account is not linked to an employee profile. Please contact your HR administrator to resolve this issue.</p>
+        </div>
+    }
+    else if (payslips?.Count == 0)
+    {
+        <div class="text-center py-5">
+            <i class="fas fa-receipt fa-3x text-muted mb-3"></i>
+            <h5 class="text-muted">No Payslips Available</h5>
+            <p class="text-muted">You don't have any payslips generated yet. Payslips will appear here once they are processed by HR.</p>
+        </div>
+    }
+    else
+    {
+        <!-- Filters -->
+        <div class="card mb-4">
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-3">
+                        <label class="form-label">Year</label>
+                        <select class="form-select" @bind="selectedYear" @bind:after="LoadPayslips">
+                            <option value="">All Years</option>
+                            @foreach (var year in availableYears)
+                            {
+                                <option value="@year">@year</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Month</label>
+                        <select class="form-select" @bind="selectedMonth" @bind:after="LoadPayslips">
+                            <option value="">All Months</option>
+                            @for (int month = 1; month <= 12; month++)
+                            {
+                                <option value="@month">@System.Globalization.CultureInfo.CurrentCulture.DateTimeFormat.GetMonthName(month)</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Status</label>
+                        <select class="form-select" @bind="selectedStatus" @bind:after="LoadPayslips">
+                            <option value="">All Status</option>
+                            <option value="@PayslipStatus.Draft">Draft</option>
+                            <option value="@PayslipStatus.Generated">Generated</option>
+                            <option value="@PayslipStatus.Approved">Approved</option>
+                            <option value="@PayslipStatus.Sent">Sent</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3 d-flex align-items-end">
+                        <button class="btn btn-outline-secondary w-100" @onclick="ClearFilters">
+                            <i class="fas fa-times"></i> Clear Filters
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Payslips List -->
+        <div class="card">
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Payslip Number</th>
+                                <th>Pay Period</th>
+                                <th>Basic Salary</th>
+                                <th>Gross Salary</th>
+                                <th>Net Salary</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var payslip in filteredPayslips)
+                            {
+                                <tr>
+                                    <td>
+                                        <strong>@payslip.PayslipNumber</strong>
+                                    </td>
+                                    <td>
+                                        <div>
+                                            <strong>@payslip.PayPeriodStart.ToString("MMM dd") - @payslip.PayPeriodEnd.ToString("MMM dd, yyyy")</strong>
+                                        </div>
+                                        @if (payslip.PayDate != default(DateTime))
+                                        {
+                                            <small class="text-muted">Pay Date: @payslip.PayDate.ToString("MMM dd, yyyy")</small>
+                                        }
+                                    </td>
+                                    <td>@payslip.BasicSalary.ToString("C")</td>
+                                    <td>@payslip.GrossSalary.ToString("C")</td>
+                                    <td>
+                                        <strong class="text-success">@payslip.NetSalary.ToString("C")</strong>
+                                    </td>
+                                    <td>
+                                        <span class="badge 
+                                            @(payslip.Status == PayslipStatus.Approved ? "bg-success" :
+                                              payslip.Status == PayslipStatus.Generated ? "bg-info" :
+                                              payslip.Status == PayslipStatus.Sent ? "bg-primary" :
+                                              "bg-secondary")">
+                                            @payslip.Status
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <div class="btn-group" role="group">
+                                            <a href="/payslips/@payslip.Id" class="btn btn-sm btn-outline-info">
+                                                <i class="fas fa-eye"></i> View
+                                            </a>
+                                            @if (payslip.Status != PayslipStatus.Draft)
+                                            {
+                                                <button type="button" class="btn btn-sm btn-outline-primary" @onclick="() => PreviewPayslip(payslip.Id)">
+                                                    <i class="fas fa-file-pdf"></i> Preview
+                                                </button>
+                                                <button type="button" class="btn btn-sm btn-primary" @onclick="() => DownloadPayslip(payslip.Id)">
+                                                    <i class="fas fa-download"></i> Download
+                                                </button>
+                                            }
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        @if (payslips?.Count > 0)
+        {
+            <div class="mt-3">
+                <small class="text-muted">
+                    Showing @filteredPayslips.Count of @payslips.Count payslips
+                </small>
+            </div>
+        }
+    }
+</div>
+
+@code {
+    private List<Payslip>? payslips;
+    private List<Payslip> filteredPayslips = new();
+    private Employee? currentEmployee;
+    private bool isLoading = true;
+    private bool isEmployeeLinked = false;
+    
+    // Filtering
+    private string selectedYear = "";
+    private string selectedMonth = "";
+    private string selectedStatus = "";
+    private List<int> availableYears = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadCurrentEmployee();
+        if (isEmployeeLinked)
+        {
+            await LoadPayslips();
+        }
+        isLoading = false;
+    }
+
+    private async Task LoadCurrentEmployee()
+    {
+        try
+        {
+            var httpContext = HttpContextAccessor?.HttpContext;
+            if (httpContext?.User?.Identity?.IsAuthenticated != true)
+            {
+                Navigation.NavigateTo("/Identity/Account/Login");
+                return;
+            }
+            
+            var user = await UserManager.GetUserAsync(httpContext.User);
+            if (user == null)
+            {
+                Navigation.NavigateTo("/Identity/Account/Login");
+                return;
+            }
+
+            using var context = DbContextFactory.CreateDbContext();
+            currentEmployee = await context.Employees
+                .Include(e => e.Department)
+                .Include(e => e.Company)
+                .FirstOrDefaultAsync(e => e.UserId == user.Id || e.Email == user.Email);
+
+            isEmployeeLinked = currentEmployee != null;
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("console.error", $"Error loading employee profile: {ex.Message}");
+        }
+    }
+
+    private async Task LoadPayslips()
+    {
+        if (currentEmployee == null) return;
+
+        try
+        {
+            using var context = DbContextFactory.CreateDbContext();
+            payslips = await context.Payslips
+                .Include(p => p.Employee)
+                .ThenInclude(e => e.Department)
+                .Where(p => p.EmployeeId == currentEmployee.Id)
+                .OrderByDescending(p => p.PayPeriodStart)
+                .ToListAsync();
+
+            // Get available years
+            availableYears = payslips.Select(p => p.PayPeriodStart.Year).Distinct().OrderByDescending(y => y).ToList();
+
+            // Apply filters
+            ApplyFilters();
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("console.error", $"Error loading payslips: {ex.Message}");
+            payslips = new List<Payslip>();
+        }
+    }
+
+    private void ApplyFilters()
+    {
+        if (payslips == null)
+        {
+            filteredPayslips = new List<Payslip>();
+            return;
+        }
+
+        var filtered = payslips.AsEnumerable();
+
+        if (!string.IsNullOrEmpty(selectedYear) && int.TryParse(selectedYear, out var year))
+        {
+            filtered = filtered.Where(p => p.PayPeriodStart.Year == year);
+        }
+
+        if (!string.IsNullOrEmpty(selectedMonth) && int.TryParse(selectedMonth, out var month))
+        {
+            filtered = filtered.Where(p => p.PayPeriodStart.Month == month);
+        }
+
+        if (!string.IsNullOrEmpty(selectedStatus) && Enum.TryParse<PayslipStatus>(selectedStatus, out var status))
+        {
+            filtered = filtered.Where(p => p.Status == status);
+        }
+
+        filteredPayslips = filtered.ToList();
+    }
+
+    private void ClearFilters()
+    {
+        selectedYear = "";
+        selectedMonth = "";
+        selectedStatus = "";
+        ApplyFilters();
+        StateHasChanged();
+    }
+
+    private async Task PreviewPayslip(int payslipId)
+    {
+        await JSRuntime.InvokeVoidAsync("open", $"/api/pdf/payslip/{payslipId}/preview", "_blank");
+    }
+
+    private async Task DownloadPayslip(int payslipId)
+    {
+        await JSRuntime.InvokeVoidAsync("downloadFile", $"/api/pdf/payslip/{payslipId}/download");
+    }
+}

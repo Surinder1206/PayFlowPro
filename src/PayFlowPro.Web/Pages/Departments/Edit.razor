@@ -1,0 +1,344 @@
+@page "/departments/edit/{Id:int}"
+@using PayFlowPro.Models.Entities
+@using PayFlowPro.Data.Context
+@using Microsoft.EntityFrameworkCore
+@using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.AspNetCore.Components.Authorization
+@inject ApplicationDbContext dbContext
+@inject NavigationManager Navigation
+@inject IJSRuntime JSRuntime
+@attribute [Authorize(Roles = "Admin,HR")]
+
+<PageTitle>Edit Department - PayFlow Pro</PageTitle>
+
+@if (department == null)
+{
+    <div class="text-center py-5">
+        <div class="spinner-border" role="status">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+        <p class="mt-2">Loading department...</p>
+    </div>
+}
+else
+{
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h3">
+            <i class="fas fa-edit me-2"></i>
+            Edit Department: @department.Name
+        </h1>
+        <div class="d-flex gap-2">
+            <a href="/departments/details/@Id" class="btn btn-outline-info">
+                <i class="fas fa-eye me-1"></i>
+                View Details
+            </a>
+            <a href="/departments" class="btn btn-outline-secondary">
+                <i class="fas fa-arrow-left me-1"></i>
+                Back to Departments
+            </a>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-lg-8 col-xl-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-building me-2"></i>
+                        Department Information
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <EditForm Model="department" OnValidSubmit="HandleValidSubmit">
+                        <DataAnnotationsValidator />
+                        <ValidationSummary class="alert alert-danger" />
+
+                        <div class="mb-3">
+                            <label for="code" class="form-label">Department Code <span class="text-danger">*</span></label>
+                            <InputText id="code" class="form-control" @bind-Value="department.Code" placeholder="e.g., IT, HR, FIN" />
+                            <ValidationMessage For="() => department.Code" class="text-danger" />
+                            <div class="form-text">
+                                A unique code to identify the department (e.g., IT, HR, FIN, SALES)
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="name" class="form-label">Department Name <span class="text-danger">*</span></label>
+                            <InputText id="name" class="form-control" @bind-Value="department.Name" placeholder="e.g., Information Technology" />
+                            <ValidationMessage For="() => department.Name" class="text-danger" />
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="description" class="form-label">Description</label>
+                            <InputTextArea id="description" class="form-control" @bind-Value="department.Description" 
+                                         rows="3" placeholder="Brief description of the department's role and responsibilities..." />
+                            <ValidationMessage For="() => department.Description" class="text-danger" />
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="manager" class="form-label">Department Manager</label>
+                            <InputSelect id="manager" class="form-control" @bind-Value="department.ManagerEmployeeId">
+                                <option value="">Select a manager (optional)</option>
+                                @foreach (var employee in availableManagers)
+                                {
+                                    <option value="@employee.Id">@employee.FirstName @employee.LastName (@employee.EmployeeCode) - @employee.JobTitle</option>
+                                }
+                            </InputSelect>
+                            <ValidationMessage For="() => department.ManagerEmployeeId" class="text-danger" />
+                            <div class="form-text">
+                                The current manager can be changed, or you can assign a new one
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <div class="form-check">
+                                <InputCheckbox id="isActive" class="form-check-input" @bind-Value="department.IsActive" />
+                                <label class="form-check-label" for="isActive">
+                                    Active Department
+                                </label>
+                            </div>
+                            <div class="form-text">
+                                @if (!department.IsActive)
+                                {
+                                    <span class="text-warning">
+                                        <i class="fas fa-exclamation-triangle me-1"></i>
+                                        Inactive departments won't be available for new employee assignments
+                                    </span>
+                                }
+                                else
+                                {
+                                    <span>Inactive departments won't be available for new employee assignments</span>
+                                }
+                            </div>
+                        </div>
+
+                        <div class="d-flex gap-2">
+                            <button type="submit" class="btn btn-primary" disabled="@isSubmitting">
+                                @if (isSubmitting)
+                                {
+                                    <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                                    <span>Saving...</span>
+                                }
+                                else
+                                {
+                                    <i class="fas fa-save me-2"></i>
+                                    <span>Update Department</span>
+                                }
+                            </button>
+                            <a href="/departments" class="btn btn-outline-secondary">
+                                Cancel
+                            </a>
+                        </div>
+                    </EditForm>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-lg-4 col-xl-6">
+            <!-- Department Statistics -->
+            <div class="card mb-3">
+                <div class="card-header">
+                    <h6 class="card-title mb-0">
+                        <i class="fas fa-chart-bar me-2"></i>
+                        Department Statistics
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="row text-center">
+                        <div class="col-6">
+                            <div class="border-end">
+                                <h4 class="text-primary mb-0">@departmentEmployees.Count</h4>
+                                <small class="text-muted">Total Employees</small>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <h4 class="text-success mb-0">@departmentEmployees.Count(e => e.Status == Models.Enums.EmploymentStatus.Active)</h4>
+                            <small class="text-muted">Active Employees</small>
+                        </div>
+                    </div>
+                    
+                    @if (departmentEmployees.Any())
+                    {
+                        <hr />
+                        <div class="small">
+                            <strong>Recent Employees:</strong>
+                            <ul class="list-unstyled mb-0 mt-2">
+                                @foreach (var emp in departmentEmployees.OrderByDescending(e => e.DateOfJoining).Take(3))
+                                {
+                                    <li class="d-flex justify-content-between">
+                                        <span>@emp.FirstName @emp.LastName</span>
+                                        <span class="text-muted">@emp.JobTitle</span>
+                                    </li>
+                                }
+                            </ul>
+                            @if (departmentEmployees.Count > 3)
+                            {
+                                <small class="text-muted">... and @(departmentEmployees.Count - 3) more</small>
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <!-- Audit Information -->
+            <div class="card">
+                <div class="card-header">
+                    <h6 class="card-title mb-0">
+                        <i class="fas fa-history me-2"></i>
+                        Audit Information
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="small">
+                        <div class="row mb-2">
+                            <div class="col-4"><strong>Created:</strong></div>
+                            <div class="col-8">@department.CreatedAt.ToString("MMM dd, yyyy 'at' HH:mm")</div>
+                        </div>
+                        <div class="row mb-2">
+                            <div class="col-4"><strong>Updated:</strong></div>
+                            <div class="col-8">@department.UpdatedAt.ToString("MMM dd, yyyy 'at' HH:mm")</div>
+                        </div>
+                        <div class="row">
+                            <div class="col-4"><strong>Status:</strong></div>
+                            <div class="col-8">
+                                @if (department.IsActive)
+                                {
+                                    <span class="badge bg-success">Active</span>
+                                }
+                                else
+                                {
+                                    <span class="badge bg-danger">Inactive</span>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public int Id { get; set; }
+
+    private Department? department;
+    private List<Employee> availableManagers = new();
+    private List<Employee> departmentEmployees = new();
+    private bool isSubmitting = false;
+    private string originalCode = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        try
+        {
+            // Load the department
+            department = await dbContext.Departments
+                .FirstOrDefaultAsync(d => d.Id == Id);
+
+            if (department == null)
+            {
+                await JSRuntime.InvokeVoidAsync("alert", "Department not found.");
+                Navigation.NavigateTo("/departments");
+                return;
+            }
+
+            originalCode = department.Code ?? string.Empty;
+
+            // Load available managers (employees who could be managers)
+            await LoadAvailableManagers();
+
+            // Load current department employees
+            departmentEmployees = await dbContext.Employees
+                .Where(e => e.DepartmentId == Id)
+                .OrderBy(e => e.FirstName)
+                .ThenBy(e => e.LastName)
+                .ToListAsync();
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("alert", $"Error loading department: {ex.Message}");
+        }
+    }
+
+    private async Task LoadAvailableManagers()
+    {
+        try
+        {
+            // Load employees who could potentially be managers
+            // Include current manager if exists, plus all active employees
+            var allPotentialManagers = await dbContext.Employees
+                .Where(e => e.Status == Models.Enums.EmploymentStatus.Active)
+                .OrderBy(e => e.FirstName)
+                .ThenBy(e => e.LastName)
+                .ToListAsync();
+
+            // If there's a current manager, make sure they're in the list even if they might not meet other criteria
+            if (department?.ManagerEmployeeId.HasValue == true)
+            {
+                var currentManager = await dbContext.Employees
+                    .FirstOrDefaultAsync(e => e.Id == department.ManagerEmployeeId.Value);
+                
+                if (currentManager != null && !allPotentialManagers.Any(e => e.Id == currentManager.Id))
+                {
+                    allPotentialManagers.Add(currentManager);
+                    allPotentialManagers = allPotentialManagers.OrderBy(e => e.FirstName).ThenBy(e => e.LastName).ToList();
+                }
+            }
+
+            availableManagers = allPotentialManagers;
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("alert", $"Error loading employees: {ex.Message}");
+        }
+    }
+
+    private async Task HandleValidSubmit()
+    {
+        if (isSubmitting || department == null) return;
+        
+        isSubmitting = true;
+        StateHasChanged();
+
+        try
+        {
+            // Check if department code already exists (excluding current department)
+            if (!string.IsNullOrEmpty(department.Code) && department.Code != originalCode)
+            {
+                var existingDepartment = await dbContext.Departments
+                    .FirstOrDefaultAsync(d => d.Id != Id && d.Code != null && d.Code.ToLower() == department.Code.ToLower());
+
+                if (existingDepartment != null)
+                {
+                    await JSRuntime.InvokeVoidAsync("alert", $"A department with code '{department.Code}' already exists. Please use a different code.");
+                    return;
+                }
+            }
+
+            // Update audit fields
+            department.UpdatedAt = DateTime.UtcNow;
+
+            // Update in database
+            dbContext.Departments.Update(department);
+            await dbContext.SaveChangesAsync();
+
+            // Show success message and navigate back
+            await JSRuntime.InvokeVoidAsync("alert", $"Department '{department.Name}' has been updated successfully!");
+            Navigation.NavigateTo("/departments");
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("alert", $"Error updating department: {ex.Message}");
+        }
+        finally
+        {
+            isSubmitting = false;
+            StateHasChanged();
+        }
+    }
+}

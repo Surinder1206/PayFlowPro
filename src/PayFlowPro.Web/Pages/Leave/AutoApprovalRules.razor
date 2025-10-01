@@ -1,0 +1,663 @@
+@page "/leave/auto-approval-rules"
+@using Microsoft.AspNetCore.Components.Forms
+@using PayFlowPro.Models.DTOs.Leave
+@using PayFlowPro.Models.Entities
+@using PayFlowPro.Models.Enums
+@using PayFlowPro.Core.Interfaces
+@using PayFlowPro.Core.Services
+@using PayFlowPro.Shared.DTOs
+@inject IAutoApprovalService AutoApprovalService
+@inject ILeaveManagementService LeaveService
+@inject IDbContextFactory<ApplicationDbContext> DbFactory
+@inject IJSRuntime JSRuntime
+@attribute [Authorize(Roles = "Admin,HR")]
+
+<PageTitle>Auto-Approval Rules</PageTitle>
+
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <div>
+                    <h2 class="mb-1">Auto-Approval Rules</h2>
+                    <p class="text-muted mb-0">Configure automatic leave approval rules for streamlined processing</p>
+                </div>
+                <button class="btn btn-primary" @onclick="ShowCreateRuleModal">
+                    <i class="oi oi-plus me-2"></i>Create New Rule
+                </button>
+            </div>
+
+            @if (isLoading)
+            {
+                <div class="text-center py-5">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                </div>
+            }
+            else if (autoApprovalRules?.Any() == true)
+            {
+                <div class="card">
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-striped table-hover mb-0">
+                                <thead class="table-dark">
+                                    <tr>
+                                        <th>Rule Name</th>
+                                        <th>Department</th>
+                                        <th>Leave Type</th>
+                                        <th>Max Days</th>
+                                        <th>Min Notice (Days)</th>
+                                        <th>Employee Level</th>
+                                        <th>Status</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var rule in autoApprovalRules)
+                                    {
+                                        <tr>
+                                            <td>
+                                                <strong>@rule.RuleName</strong>
+                                                @if (!string.IsNullOrWhiteSpace(rule.Description))
+                                                {
+                                                    <br><small class="text-muted">@rule.Description</small>
+                                                }
+                                            </td>
+                                            <td>
+                                                @if (!string.IsNullOrEmpty(rule.ApplicableDepartmentIds))
+                                                {
+                                                    var deptIds = rule.ApplicableDepartmentIds.Split(',', StringSplitOptions.RemoveEmptyEntries);
+                                                    @foreach (var deptIdStr in deptIds.Take(2))
+                                                    {
+                                                        if (int.TryParse(deptIdStr, out var deptId))
+                                                        {
+                                                            var dept = departments?.FirstOrDefault(d => d.Id == deptId);
+                                                            <span class="badge bg-info me-1">@(dept?.Name ?? "Unknown")</span>
+                                                        }
+                                                    }
+                                                    @if (deptIds.Length > 2)
+                                                    {
+                                                        <span class="badge bg-secondary">+@(deptIds.Length - 2) more</span>
+                                                    }
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge bg-secondary">All Departments</span>
+                                                }
+                                            </td>
+                                            <td>
+                                                @if (!string.IsNullOrEmpty(rule.ApplicableLeaveTypeIds))
+                                                {
+                                                    var typeIds = rule.ApplicableLeaveTypeIds.Split(',', StringSplitOptions.RemoveEmptyEntries);
+                                                    @foreach (var typeIdStr in typeIds.Take(2))
+                                                    {
+                                                        if (int.TryParse(typeIdStr, out var typeId))
+                                                        {
+                                                            var leaveType = leaveTypes?.FirstOrDefault(lt => lt.Id == typeId);
+                                                            <span class="badge bg-primary me-1">@(leaveType?.Name ?? "Unknown")</span>
+                                                        }
+                                                    }
+                                                    @if (typeIds.Length > 2)
+                                                    {
+                                                        <span class="badge bg-secondary">+@(typeIds.Length - 2) more</span>
+                                                    }
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge bg-secondary">All Types</span>
+                                                }
+                                            </td>
+                                            <td>
+                                                @if (rule.MaxDaysAllowed.HasValue)
+                                                {
+                                                    <text>@rule.MaxDaysAllowed.Value</text>
+                                                }
+                                                else
+                                                {
+                                                    <text>No Limit</text>
+                                                }
+                                            </td>
+                                            <td>
+                                                @if (rule.MinNoticeRequiredDays.HasValue)
+                                                {
+                                                    <text>@rule.MinNoticeRequiredDays.Value</text>
+                                                }
+                                                else
+                                                {
+                                                    <text>No Requirement</text>
+                                                }
+                                            </td>
+                                            <td>
+                                                @if (rule.ApplicableEmployeeLevel.HasValue && rule.ApplicableEmployeeLevel.Value != AutoApprovalEmployeeLevel.All)
+                                                {
+                                                    <span class="badge bg-warning">@rule.ApplicableEmployeeLevel.Value</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge bg-secondary">All Levels</span>
+                                                }
+                                            </td>
+                                            <td>
+                                                @if (rule.IsActive)
+                                                {
+                                                    <span class="badge bg-success">Active</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge bg-danger">Inactive</span>
+                                                }
+                                            </td>
+                                            <td>
+                                                <div class="btn-group" role="group">
+                                                    <button class="btn btn-sm btn-outline-info" @onclick="() => ViewRuleDetails(rule)" title="View Details">
+                                                        <i class="oi oi-eye"></i>
+                                                    </button>
+                                                    <button class="btn btn-sm btn-outline-primary" @onclick="() => EditRule(rule)" title="Edit">
+                                                        <i class="oi oi-pencil"></i>
+                                                    </button>
+                                                    <button class="btn btn-sm btn-outline-warning" @onclick="() => TestRule(rule)" title="Test Rule">
+                                                        <i class="oi oi-wrench"></i>
+                                                    </button>
+                                                    @if (rule.IsActive)
+                                                    {
+                                                        <button class="btn btn-sm btn-outline-secondary" @onclick="() => ToggleRuleStatus(rule)" title="Deactivate">
+                                                            <i class="oi oi-ban"></i>
+                                                        </button>
+                                                    }
+                                                    else
+                                                    {
+                                                        <button class="btn btn-sm btn-outline-success" @onclick="() => ToggleRuleStatus(rule)" title="Activate">
+                                                            <i class="oi oi-check"></i>
+                                                        </button>
+                                                    }
+                                                    <button class="btn btn-sm btn-outline-danger" @onclick="() => DeleteRule(rule)" title="Delete">
+                                                        <i class="oi oi-trash"></i>
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            }
+            else
+            {
+                <div class="card">
+                    <div class="card-body text-center py-5">
+                        <i class="oi oi-info display-1 text-muted mb-3"></i>
+                        <h4>No Auto-Approval Rules Found</h4>
+                        <p class="text-muted">Create your first auto-approval rule to streamline leave request processing.</p>
+                        <button class="btn btn-primary" @onclick="ShowCreateRuleModal">
+                            <i class="oi oi-plus me-2"></i>Create First Rule
+                        </button>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+<!-- Create/Edit Rule Modal -->
+<div class="modal fade @(showRuleModal ? "show d-block" : "")" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">@(editingRule == null ? "Create New Rule" : "Edit Rule")</h5>
+                <button type="button" class="btn-close" @onclick="HideRuleModal"></button>
+            </div>
+            <EditForm Model="ruleFormModel" OnValidSubmit="SaveRule">
+                <DataAnnotationsValidator />
+                <div class="modal-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">Rule Name <span class="text-danger">*</span></label>
+                                <InputText @bind-Value="ruleFormModel.RuleName" class="form-control" placeholder="Enter rule name" />
+                                <ValidationMessage For="@(() => ruleFormModel.RuleName)" />
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">Priority</label>
+                                <InputNumber @bind-Value="ruleFormModel.Priority" class="form-control" />
+                                <ValidationMessage For="@(() => ruleFormModel.Priority)" />
+                                <small class="text-muted">Higher priority rules are evaluated first</small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Description</label>
+                        <InputTextArea @bind-Value="ruleFormModel.Description" class="form-control" rows="2" placeholder="Optional description of the rule" />
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">Department</label>
+                                <InputSelect @bind-Value="ruleFormModel.DepartmentId" class="form-select">
+                                    <option value="">All Departments</option>
+                                    @if (departments?.Any() == true)
+                                    {
+                                        @foreach (var dept in departments)
+                                        {
+                                            <option value="@dept.Id">@dept.Name</option>
+                                        }
+                                    }
+                                </InputSelect>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">Leave Type</label>
+                                <InputSelect @bind-Value="ruleFormModel.LeaveTypeId" class="form-select">
+                                    <option value="">All Leave Types</option>
+                                    @if (leaveTypes?.Any() == true)
+                                    {
+                                        @foreach (var leaveType in leaveTypes)
+                                        {
+                                            <option value="@leaveType.Id">@leaveType.Name</option>
+                                        }
+                                    }
+                                </InputSelect>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">Maximum Days Allowed</label>
+                                <InputNumber @bind-Value="ruleFormModel.MaxDaysAllowed" class="form-control" placeholder="Leave blank for no limit" />
+                                <small class="text-muted">Leave blank for no day limit</small>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">Minimum Notice Required (Days)</label>
+                                <InputNumber @bind-Value="ruleFormModel.MinNoticeRequiredDays" class="form-control" placeholder="Leave blank for no requirement" />
+                                <small class="text-muted">Leave blank for no notice requirement</small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">Employee Level</label>
+                                <InputSelect @bind-Value="ruleFormModel.EmployeeLevel" class="form-select">
+                                    <option value="">All Employee Levels</option>
+                                    <option value="Junior">Junior</option>
+                                    <option value="Mid">Mid-Level</option>
+                                    <option value="Senior">Senior</option>
+                                    <option value="Lead">Team Lead</option>
+                                    <option value="Manager">Manager</option>
+                                    <option value="Director">Director</option>
+                                </InputSelect>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <InputCheckbox @bind-Value="ruleFormModel.IsActive" class="form-check-input" id="isActive" />
+                            <label class="form-check-label" for="isActive">
+                                Rule is Active
+                            </label>
+                        </div>
+                    </div>
+
+                    @if (formErrorMessage != null)
+                    {
+                        <div class="alert alert-danger">
+                            @formErrorMessage
+                        </div>
+                    }
+
+                    @if (formSuccessMessage != null)
+                    {
+                        <div class="alert alert-success">
+                            @formSuccessMessage
+                        </div>
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="HideRuleModal">Cancel</button>
+                    <button type="submit" class="btn btn-primary" disabled="@isSaving">
+                        @if (isSaving)
+                        {
+                            <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                        }
+                        @(editingRule == null ? "Create Rule" : "Update Rule")
+                    </button>
+                </div>
+            </EditForm>
+        </div>
+    </div>
+</div>
+
+<!-- Rule Details Modal -->
+<div class="modal fade @(showDetailsModal ? "show d-block" : "")" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Rule Details</h5>
+                <button type="button" class="btn-close" @onclick="HideDetailsModal"></button>
+            </div>
+            <div class="modal-body">
+                @if (selectedRule != null)
+                {
+                    <div class="row">
+                        <div class="col-md-6">
+                            <table class="table table-borderless">
+                                <tr>
+                                    <th>Rule Name:</th>
+                                    <td>@selectedRule.RuleName</td>
+                                </tr>
+                                <tr>
+                                    <th>Description:</th>
+                                    <td>@(selectedRule.Description ?? "N/A")</td>
+                                </tr>
+                                <tr>
+                                    <th>Priority:</th>
+                                    <td>@selectedRule.Priority</td>
+                                </tr>
+                                <tr>
+                                    <th>Status:</th>
+                                    <td>
+                                        @if (selectedRule.IsActive)
+                                        {
+                                            <span class="badge bg-success">Active</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge bg-danger">Inactive</span>
+                                        }
+                                    </td>
+                                </tr>
+                            </table>
+                        </div>
+                        <div class="col-md-6">
+                            <table class="table table-borderless">
+                                <tr>
+                                    <th>Department:</th>
+                                    <td>
+                                        @if (!string.IsNullOrEmpty(selectedRule.ApplicableDepartmentIds))
+                                        {
+                                            <text>@selectedRule.ApplicableDepartmentIds</text>
+                                        }
+                                        else
+                                        {
+                                            <text>All Departments</text>
+                                        }
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <th>Leave Type:</th>
+                                    <td>
+                                        @if (!string.IsNullOrEmpty(selectedRule.ApplicableLeaveTypeIds))
+                                        {
+                                            <text>@selectedRule.ApplicableLeaveTypeIds</text>
+                                        }
+                                        else
+                                        {
+                                            <text>All Leave Types</text>
+                                        }
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <th>Max Days:</th>
+                                    <td>@(selectedRule.MaxDaysAllowed?.ToString() ?? "No Limit")</td>
+                                </tr>
+                                <tr>
+                                    <th>Min Notice:</th>
+                                    <td>@(selectedRule.MinNoticeRequiredDays?.ToString() ?? "No Requirement") days</td>
+                                </tr>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div class="mt-4">
+                        <h6>Audit Information</h6>
+                        <table class="table table-sm table-borderless">
+                            <tr>
+                                <th>Created:</th>
+                                <td>@selectedRule.CreatedAt.ToString("MMM dd, yyyy hh:mm tt")</td>
+                            </tr>
+                            <tr>
+                                <th>Last Updated:</th>
+                                <td>@selectedRule.UpdatedAt.ToString("MMM dd, yyyy hh:mm tt")</td>
+                            </tr>
+                            <tr>
+                                <th>Employee Level:</th>
+                                <td>@(selectedRule.ApplicableEmployeeLevel?.ToString() ?? "All")</td>
+                            </tr>
+                        </table>
+                    </div>
+                }
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" @onclick="HideDetailsModal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private List<AutoApprovalRule>? autoApprovalRules;
+    private List<DepartmentDto>? departments;
+    private List<LeaveTypeDto>? leaveTypes;
+    private bool isLoading = true;
+    private bool showRuleModal = false;
+    private bool showDetailsModal = false;
+    private bool isSaving = false;
+    private string? formErrorMessage;
+    private string? formSuccessMessage;
+    
+    private AutoApprovalRule? editingRule;
+    private AutoApprovalRule? selectedRule;
+    private CreateAutoApprovalRuleDto ruleFormModel = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        try
+        {
+            isLoading = true;
+            
+            // Load auto-approval rules
+            var rulesResponse = await AutoApprovalService.GetAutoApprovalRulesAsync();
+            if (rulesResponse.IsSuccess)
+            {
+                autoApprovalRules = rulesResponse.Data?.ToList();
+            }
+
+            // Load departments and leave types for dropdowns
+            using var context = await DbFactory.CreateDbContextAsync();
+            departments = await context.Departments
+                .Where(d => d.IsActive)
+                .Select(d => new DepartmentDto { Id = d.Id, Name = d.Name })
+                .ToListAsync();
+
+            var leaveTypesResponse = await LeaveService.GetActiveLeaveTypesAsync();
+            if (leaveTypesResponse.IsSuccess)
+            {
+                leaveTypes = leaveTypesResponse.Data?.ToList();
+            }
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("alert", $"Error loading data: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private void ShowCreateRuleModal()
+    {
+        editingRule = null;
+        ruleFormModel = new CreateAutoApprovalRuleDto
+        {
+            IsActive = true,
+            Priority = 1
+        };
+        formErrorMessage = null;
+        formSuccessMessage = null;
+        showRuleModal = true;
+    }
+
+    private void EditRule(AutoApprovalRule rule)
+    {
+        editingRule = rule;
+        ruleFormModel = new CreateAutoApprovalRuleDto
+        {
+            RuleName = rule.RuleName,
+            Description = rule.Description,
+            DepartmentId = !string.IsNullOrEmpty(rule.ApplicableDepartmentIds) && int.TryParse(rule.ApplicableDepartmentIds.Split(',')[0], out var deptId) ? deptId : null,
+            LeaveTypeId = !string.IsNullOrEmpty(rule.ApplicableLeaveTypeIds) && int.TryParse(rule.ApplicableLeaveTypeIds.Split(',')[0], out var leaveTypeId) ? leaveTypeId : null,
+            EmployeeLevel = rule.ApplicableEmployeeLevel?.ToString(),
+            MaxDaysAllowed = rule.MaxDaysAllowed,
+            MinNoticeRequiredDays = rule.MinNoticeRequiredDays,
+            IsActive = rule.IsActive,
+            Priority = rule.Priority
+        };
+        formErrorMessage = null;
+        formSuccessMessage = null;
+        showRuleModal = true;
+    }
+
+    private void ViewRuleDetails(AutoApprovalRule rule)
+    {
+        selectedRule = rule;
+        showDetailsModal = true;
+    }
+
+    private async Task TestRule(AutoApprovalRule rule)
+    {
+        // This would open a test interface - simplified for now
+        await JSRuntime.InvokeVoidAsync("alert", $"Test functionality for rule '{rule.RuleName}' would be implemented here.");
+    }
+
+    private async Task ToggleRuleStatus(AutoApprovalRule rule)
+    {
+        try
+        {
+            var confirmed = await JSRuntime.InvokeAsync<bool>("confirm", 
+                $"Are you sure you want to {(rule.IsActive ? "deactivate" : "activate")} the rule '{rule.RuleName}'?");
+            
+            if (confirmed)
+            {
+                var response = await AutoApprovalService.ToggleAutoApprovalRuleAsync(rule.Id);
+                if (response.IsSuccess)
+                {
+                    rule.IsActive = !rule.IsActive;
+                    StateHasChanged();
+                }
+                else
+                {
+                    await JSRuntime.InvokeVoidAsync("alert", $"Error updating rule status: {response.Message}");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("alert", $"Error updating rule status: {ex.Message}");
+        }
+    }
+
+    private async Task DeleteRule(AutoApprovalRule rule)
+    {
+        try
+        {
+            var confirmed = await JSRuntime.InvokeAsync<bool>("confirm", 
+                $"Are you sure you want to delete the rule '{rule.RuleName}'? This action cannot be undone.");
+            
+            if (confirmed)
+            {
+                var response = await AutoApprovalService.DeleteAutoApprovalRuleAsync(rule.Id);
+                if (response.IsSuccess)
+                {
+                    autoApprovalRules?.Remove(rule);
+                    StateHasChanged();
+                }
+                else
+                {
+                    await JSRuntime.InvokeVoidAsync("alert", $"Error deleting rule: {response.Message}");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("alert", $"Error deleting rule: {ex.Message}");
+        }
+    }
+
+    private async Task SaveRule()
+    {
+        try
+        {
+            isSaving = true;
+            formErrorMessage = null;
+            formSuccessMessage = null;
+
+            ServiceResponse<AutoApprovalRule> response;
+
+            if (editingRule == null)
+            {
+                response = await AutoApprovalService.CreateAutoApprovalRuleAsync(ruleFormModel);
+            }
+            else
+            {
+                response = await AutoApprovalService.UpdateAutoApprovalRuleAsync(editingRule.Id, ruleFormModel);
+            }
+
+            if (response.IsSuccess)
+            {
+                formSuccessMessage = $"Rule {(editingRule == null ? "created" : "updated")} successfully!";
+                await Task.Delay(1500); // Show success message briefly
+                await LoadData(); // Refresh the list
+                HideRuleModal();
+            }
+            else
+            {
+                formErrorMessage = response.Message ?? "An error occurred while saving the rule.";
+            }
+        }
+        catch (Exception ex)
+        {
+            formErrorMessage = $"Error saving rule: {ex.Message}";
+        }
+        finally
+        {
+            isSaving = false;
+            StateHasChanged();
+        }
+    }
+
+    private void HideRuleModal()
+    {
+        showRuleModal = false;
+        editingRule = null;
+        formErrorMessage = null;
+        formSuccessMessage = null;
+    }
+
+    private void HideDetailsModal()
+    {
+        showDetailsModal = false;
+        selectedRule = null;
+    }
+}

@@ -1,0 +1,49 @@
+@using Microsoft.AspNetCore.Identity
+@using PayFlowPro.Models.Entities
+
+@inject SignInManager<ApplicationUser> SignInManager
+@inject UserManager<ApplicationUser> UserManager
+
+<AuthorizeView>
+    <Authorized>
+        <div class="navbar-nav">
+            <div class="nav-item dropdown">
+                <a class="nav-link dropdown-toggle text-light user-dropdown-toggle"
+                   href="#"
+                   id="userDropdown"
+                   role="button"
+                   data-bs-toggle="dropdown"
+                   aria-expanded="false"
+                   onclick="toggleUserDropdown(event)"
+                   style="background-color: #007bff; border: 2px solid white; color: white; font-weight: bold; padding: 8px 16px; border-radius: 5px;">
+                    <i class="fas fa-user"></i> @context.User.Identity?.Name
+                </a>
+                <ul class="dropdown-menu dropdown-menu-end user-dropdown-menu"
+                    aria-labelledby="userDropdown"
+                    style="background-color: white; border: 3px solid #007bff; box-shadow: 0 4px 8px rgba(0,123,255,0.3); min-width: 150px;">
+                    <li>
+                        <a class="dropdown-item" href="/Account/Manage" style="color: #007bff; font-weight: bold; font-size: 14px;">
+                            <i class="fas fa-user-cog"></i> Profile
+                        </a>
+                    </li>
+                    <li><hr class="dropdown-divider" style="border-color: #007bff;"></li>
+                    <li>
+                        <a href="/Account/Logout" class="dropdown-item" style="color: #dc3545; font-weight: bold; font-size: 14px; text-decoration: none;">
+                            <i class="fas fa-sign-out-alt"></i> Logout
+                        </a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </Authorized>
+    <NotAuthorized>
+        <div class="navbar-nav">
+            <a class="nav-link text-light" href="/Account/Register">
+                <i class="fas fa-user-plus"></i> Register
+            </a>
+            <a class="nav-link text-light" href="/Account/Login">
+                <i class="fas fa-sign-in-alt"></i> Login
+            </a>
+        </div>
+    </NotAuthorized>
+</AuthorizeView>

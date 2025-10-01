@@ -1,0 +1,742 @@
+@page "/leave/approval"
+@using PayFlowPro.Models.DTOs.Leave
+@using PayFlowPro.Core.Services
+@using PayFlowPro.Shared.DTOs
+@inject ILeaveManagementService LeaveService
+@inject IJSRuntime JS
+@inject NavigationManager Navigation
+@attribute [Authorize(Roles = "Admin,HR,Manager")]
+
+<div class="container-fluid py-4">
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h2 class="mb-0">
+                            <i class="fas fa-tasks text-primary me-2"></i>
+                            Leave Approval Queue
+                        </h2>
+                        <div class="d-flex gap-2">
+                            <span class="badge bg-warning fs-6">@pendingCount Pending</span>
+                            <button class="btn btn-outline-primary btn-sm" @onclick="RefreshData">
+                                <i class="fas fa-sync-alt me-1"></i>
+                                Refresh
+                            </button>
+                        </div>
+                    </div>
+
+                    @if (!string.IsNullOrEmpty(successMessage))
+                    {
+                        <div class="alert alert-success alert-dismissible fade show" role="alert">
+                            <i class="fas fa-check-circle me-2"></i>
+                            @successMessage
+                            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                        </div>
+                    }
+
+                    @if (!string.IsNullOrEmpty(errorMessage))
+                    {
+                        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                            <i class="fas fa-exclamation-circle me-2"></i>
+                            @errorMessage
+                            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Summary Cards -->
+    <div class="row mb-4">
+        <div class="col-md-3 mb-3">
+            <div class="card bg-warning text-white h-100">
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <div class="flex-shrink-0">
+                            <i class="fas fa-clock fa-2x opacity-75"></i>
+                        </div>
+                        <div class="flex-grow-1 ms-3">
+                            <div class="fs-4 fw-bold">@pendingCount</div>
+                            <div class="small">Pending Approval</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-3">
+            <div class="card bg-success text-white h-100">
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <div class="flex-shrink-0">
+                            <i class="fas fa-check-circle fa-2x opacity-75"></i>
+                        </div>
+                        <div class="flex-grow-1 ms-3">
+                            <div class="fs-4 fw-bold">@approvedCount</div>
+                            <div class="small">Approved Today</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-3">
+            <div class="card bg-danger text-white h-100">
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <div class="flex-shrink-0">
+                            <i class="fas fa-times-circle fa-2x opacity-75"></i>
+                        </div>
+                        <div class="flex-grow-1 ms-3">
+                            <div class="fs-4 fw-bold">@rejectedCount</div>
+                            <div class="small">Rejected Today</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-3">
+            <div class="card bg-info text-white h-100">
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <div class="flex-shrink-0">
+                            <i class="fas fa-exclamation-triangle fa-2x opacity-75"></i>
+                        </div>
+                        <div class="flex-grow-1 ms-3">
+                            <div class="fs-4 fw-bold">@urgentCount</div>
+                            <div class="small">Urgent (&lt; 7 days)</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-3">
+                            <label class="form-label">Status</label>
+                            <select class="form-select" @bind="statusFilter" @bind:after="ApplyFilters">
+                                <option value="">All Status</option>
+                                <option value="Pending">Pending</option>
+                                <option value="Approved">Approved</option>
+                                <option value="Rejected">Rejected</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Department</label>
+                            <select class="form-select" @bind="departmentFilter" @bind:after="ApplyFilters">
+                                <option value="">All Departments</option>
+                                @if (departments?.Any() == true)
+                                {
+                                    @foreach (var dept in departments)
+                                    {
+                                        <option value="@dept.Id">@dept.Name</option>
+                                    }
+                                }
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Leave Type</label>
+                            <select class="form-select" @bind="leaveTypeFilter" @bind:after="ApplyFilters">
+                                <option value="">All Types</option>
+                                @if (leaveTypes?.Any() == true)
+                                {
+                                    @foreach (var type in leaveTypes)
+                                    {
+                                        <option value="@type.Id">@type.Name</option>
+                                    }
+                                }
+                            </select>
+                        </div>
+                        <div class="col-md-3 d-flex align-items-end">
+                            <button type="button" class="btn btn-outline-secondary w-100" @onclick="ClearFilters">
+                                <i class="fas fa-times me-1"></i>
+                                Clear Filters
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Leave Requests Table -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">
+                        <i class="fas fa-list me-2"></i>
+                        Leave Requests (@(filteredRequests?.Count ?? 0))
+                    </h5>
+                    <div class="btn-group btn-group-sm">
+                        <button class="btn btn-outline-success" @onclick="BulkApprove" disabled="@(!selectedRequests.Any())">
+                            <i class="fas fa-check me-1"></i>
+                            Bulk Approve (@selectedRequests.Count)
+                        </button>
+                        <button class="btn btn-outline-danger" @onclick="BulkReject" disabled="@(!selectedRequests.Any())">
+                            <i class="fas fa-times me-1"></i>
+                            Bulk Reject (@selectedRequests.Count)
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body p-0">
+                    @if (filteredRequests?.Any() == true)
+                    {
+                        <div class="table-responsive">
+                            <table class="table table-hover mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th width="40">
+                                            <input type="checkbox" @onchange="ToggleSelectAll" />
+                                        </th>
+                                        <th>Employee</th>
+                                        <th>Request #</th>
+                                        <th>Leave Type</th>
+                                        <th>Dates</th>
+                                        <th>Days</th>
+                                        <th>Reason</th>
+                                        <th>Priority</th>
+                                        <th>Status</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var request in GetPagedRequests())
+                                    {
+                                        <tr class="@(selectedRequests.Contains(request.Id) ? "table-active" : "")">
+                                            <td>
+                                                <input type="checkbox" 
+                                                       checked="@selectedRequests.Contains(request.Id)"
+                                                       @onchange="() => ToggleSelection(request.Id)" />
+                                            </td>
+                                            <td>
+                                                <div class="d-flex align-items-center">
+                                                    <div class="avatar-sm bg-light rounded-circle d-flex align-items-center justify-content-center me-2">
+                                                        <i class="fas fa-user text-muted"></i>
+                                                    </div>
+                                                    <div>
+                                                        <strong>@request.EmployeeName</strong>
+                                                        <small class="d-block text-muted">@request.DepartmentName</small>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td>
+                                                <code>@request.RequestNumber</code>
+                                            </td>
+                                            <td>
+                                                <div class="d-flex align-items-center">
+                                                    <span class="badge me-2" style="background-color: @request.LeaveTypeColor; width: 8px; height: 8px;"></span>
+                                                    @request.LeaveTypeName
+                                                </div>
+                                            </td>
+                                            <td>
+                                                <div>
+                                                    <strong>@request.StartDate.ToString("MMM dd")</strong> - 
+                                                    <strong>@request.EndDate.ToString("MMM dd, yyyy")</strong>
+                                                    @if (request.IsHalfDay)
+                                                    {
+                                                        <small class="d-block text-muted">@request.HalfDaySession Half Day</small>
+                                                    }
+                                                </div>
+                                            </td>
+                                            <td>
+                                                <span class="fw-bold">@request.DaysRequested.ToString("F1")</span>
+                                            </td>
+                                            <td>
+                                                <span class="text-truncate d-inline-block" style="max-width: 150px;" title="@request.Reason">
+                                                    @request.Reason
+                                                </span>
+                                            </td>
+                                            <td>
+                                                @{
+                                                    var daysUntilStart = (request.StartDate - DateTime.Today).Days;
+                                                    var priorityClass = daysUntilStart <= 3 ? "danger" : daysUntilStart <= 7 ? "warning" : "success";
+                                                    var priorityText = daysUntilStart <= 3 ? "Urgent" : daysUntilStart <= 7 ? "Medium" : "Normal";
+                                                }
+                                                <span class="badge bg-@priorityClass">@priorityText</span>
+                                                <small class="d-block text-muted">@daysUntilStart days</small>
+                                            </td>
+                                            <td>
+                                                @{
+                                                    var statusClass = request.Status switch
+                                                    {
+                                                        "Approved" => "success",
+                                                        "Rejected" => "danger",
+                                                        "Pending" => "warning",
+                                                        _ => "light"
+                                                    };
+                                                }
+                                                <span class="badge bg-@statusClass">@request.Status</span>
+                                                <small class="d-block text-muted">@request.SubmittedAt.ToString("MMM dd")</small>
+                                            </td>
+                                            <td>
+                                                <div class="btn-group btn-group-sm">
+                                                    <button class="btn btn-outline-info" @onclick="() => ViewRequest(request.Id)" title="View Details">
+                                                        <i class="fas fa-eye"></i>
+                                                    </button>
+                                                    @if (request.Status == "Pending")
+                                                    {
+                                                        <button class="btn btn-outline-success" @onclick="() => QuickApprove(request.Id)" title="Quick Approve">
+                                                            <i class="fas fa-check"></i>
+                                                        </button>
+                                                        <button class="btn btn-outline-danger" @onclick="() => QuickReject(request.Id)" title="Quick Reject">
+                                                            <i class="fas fa-times"></i>
+                                                        </button>
+                                                    }
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <!-- Pagination -->
+                        @if (totalPages > 1)
+                        {
+                            <div class="d-flex justify-content-between align-items-center p-3 border-top">
+                                <div class="text-muted">
+                                    Showing @((currentPage - 1) * pageSize + 1) to @Math.Min(currentPage * pageSize, filteredRequests.Count) 
+                                    of @filteredRequests.Count entries
+                                </div>
+                                <nav>
+                                    <ul class="pagination pagination-sm mb-0">
+                                        <li class="page-item @(currentPage == 1 ? "disabled" : "")">
+                                            <button class="page-link" @onclick="() => ChangePage(currentPage - 1)">
+                                                <i class="fas fa-chevron-left"></i>
+                                            </button>
+                                        </li>
+                                        
+                                        @for (int i = Math.Max(1, currentPage - 2); i <= Math.Min(totalPages, currentPage + 2); i++)
+                                        {
+                                            <li class="page-item @(i == currentPage ? "active" : "")">
+                                                <button class="page-link" @onclick="() => ChangePage(i)">@i</button>
+                                            </li>
+                                        }
+                                        
+                                        <li class="page-item @(currentPage == totalPages ? "disabled" : "")">
+                                            <button class="page-link" @onclick="() => ChangePage(currentPage + 1)">
+                                                <i class="fas fa-chevron-right"></i>
+                                            </button>
+                                        </li>
+                                    </ul>
+                                </nav>
+                            </div>
+                        }
+                    }
+                    else if (isLoading)
+                    {
+                        <div class="text-center py-5">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                            <p class="mt-3 text-muted">Loading leave requests...</p>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="text-center py-5">
+                            <i class="fas fa-clipboard-check fa-3x text-muted mb-3"></i>
+                            <h5 class="text-muted">No Leave Requests Found</h5>
+                            <p class="text-muted">
+                                @if (HasActiveFilters())
+                                {
+                                    <span>Try adjusting your filters or </span>
+                                    <button class="btn btn-link p-0" @onclick="ClearFilters">clear all filters</button>
+                                }
+                                else
+                                {
+                                    <span>All leave requests have been processed.</span>
+                                }
+                            </p>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Approval Modal -->
+<div class="modal fade" id="approvalModal" tabindex="-1" aria-labelledby="approvalModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="approvalModalLabel">
+                    <i class="fas @(isApproval ? "fa-check-circle text-success" : "fa-times-circle text-danger") me-2"></i>
+                    @(isApproval ? "Approve" : "Reject") Leave Request
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                @if (selectedRequest != null)
+                {
+                    <div class="row mb-4">
+                        <div class="col-md-6">
+                            <h6 class="text-muted">Employee</h6>
+                            <p class="mb-1"><strong>@selectedRequest.EmployeeName</strong></p>
+                            <p class="text-muted small">@selectedRequest.DepartmentName</p>
+                        </div>
+                        <div class="col-md-6">
+                            <h6 class="text-muted">Leave Details</h6>
+                            <p class="mb-1"><strong>@selectedRequest.LeaveTypeName</strong></p>
+                            <p class="text-muted small">
+                                @selectedRequest.StartDate.ToString("MMM dd, yyyy") - 
+                                @selectedRequest.EndDate.ToString("MMM dd, yyyy")
+                                (@selectedRequest.DaysRequested days)
+                            </p>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <h6 class="text-muted">Reason for Leave</h6>
+                        <p class="border rounded p-3 bg-light">@selectedRequest.Reason</p>
+                    </div>
+                }
+
+                <div class="mb-3">
+                    <label for="approvalComments" class="form-label">
+                        @(isApproval ? "Approval" : "Rejection") Comments @(isApproval ? "" : "*")
+                    </label>
+                    <textarea class="form-control" id="approvalComments" rows="3" 
+                              @bind="approvalComments" 
+                              placeholder="@(isApproval ? "Add any approval comments (optional)..." : "Please provide a reason for rejection...")"></textarea>
+                </div>
+
+                @if (!isApproval && string.IsNullOrWhiteSpace(approvalComments))
+                {
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        Please provide a reason for rejecting this leave request.
+                    </div>
+                }
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn @(isApproval ? "btn-success" : "btn-danger")" 
+                        @onclick="ConfirmApproval" 
+                        disabled="@(isProcessing || (!isApproval && string.IsNullOrWhiteSpace(approvalComments)))">
+                    @if (isProcessing)
+                    {
+                        <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                        <text>Processing...</text>
+                    }
+                    else
+                    {
+                        <i class="fas @(isApproval ? "fa-check" : "fa-times") me-2"></i>
+                        <text>@(isApproval ? "Approve" : "Reject") Request</text>
+                    }
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private List<LeaveRequestDto>? allRequests;
+    private List<LeaveRequestDto>? filteredRequests;
+    private List<LeaveTypeDto>? leaveTypes;
+    private List<DepartmentDto>? departments;
+    private HashSet<int> selectedRequests = new();
+    private bool isLoading = true;
+    private string successMessage = string.Empty;
+    private string errorMessage = string.Empty;
+    private int currentManagerId = 1; // Would be from authentication context
+
+    // Modal variables
+    private LeaveRequestDto? selectedRequest;
+    private bool isApproval;
+    private string approvalComments = string.Empty;
+    private bool isProcessing = false;
+
+    // Summary counts
+    private int pendingCount = 0;
+    private int approvedCount = 0;
+    private int rejectedCount = 0;
+    private int urgentCount = 0;
+
+    // Filters
+    private string statusFilter = "Pending";
+    private int? departmentFilter;
+    private int? leaveTypeFilter;
+
+    // Pagination
+    private int currentPage = 1;
+    private int pageSize = 10;
+    private int totalPages => (int)Math.Ceiling((double)(filteredRequests?.Count ?? 0) / pageSize);
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        isLoading = true;
+        try
+        {
+            // Load pending leave requests for approval
+            var requestsResult = await LeaveService.GetPendingLeaveRequestsAsync();
+            if (requestsResult.IsSuccess)
+            {
+                allRequests = requestsResult.Data?.OrderBy(r => r.StartDate).ToList() ?? new List<LeaveRequestDto>();
+                CalculateSummaryCounts();
+            }
+
+            // Load leave types for filtering
+            var typesResult = await LeaveService.GetLeaveTypesAsync();
+            if (typesResult.IsSuccess)
+            {
+                leaveTypes = typesResult.Data;
+            }
+
+            // Load departments for filtering (this would be a new service method)
+            // departments = await LoadDepartments();
+
+            ApplyFilters();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error loading data: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void CalculateSummaryCounts()
+    {
+        if (allRequests == null) return;
+
+        var today = DateTime.Today;
+        pendingCount = allRequests.Count(r => r.Status == "Pending");
+        approvedCount = allRequests.Count(r => r.Status == "Approved" && r.ApprovedAt?.Date == today);
+        rejectedCount = allRequests.Count(r => r.Status == "Rejected" && r.ApprovedAt?.Date == today);
+        urgentCount = allRequests.Count(r => r.Status == "Pending" && (r.StartDate - today).Days <= 7);
+    }
+
+    private async Task ApplyFilters()
+    {
+        filteredRequests = allRequests?.Where(r =>
+            (string.IsNullOrEmpty(statusFilter) || r.Status.Equals(statusFilter, StringComparison.OrdinalIgnoreCase)) &&
+            (!departmentFilter.HasValue || r.DepartmentId == departmentFilter.Value) &&
+            (!leaveTypeFilter.HasValue || r.LeaveTypeId == leaveTypeFilter.Value)
+        ).ToList() ?? new List<LeaveRequestDto>();
+
+        currentPage = 1;
+        selectedRequests.Clear();
+        StateHasChanged();
+    }
+
+    private async Task ClearFilters()
+    {
+        statusFilter = "Pending";
+        departmentFilter = null;
+        leaveTypeFilter = null;
+        await ApplyFilters();
+    }
+
+    private bool HasActiveFilters()
+    {
+        return statusFilter != "Pending" || departmentFilter.HasValue || leaveTypeFilter.HasValue;
+    }
+
+    private List<LeaveRequestDto> GetPagedRequests()
+    {
+        if (filteredRequests == null) return new List<LeaveRequestDto>();
+        
+        return filteredRequests
+            .Skip((currentPage - 1) * pageSize)
+            .Take(pageSize)
+            .ToList();
+    }
+
+    private void ChangePage(int page)
+    {
+        if (page >= 1 && page <= totalPages)
+        {
+            currentPage = page;
+            StateHasChanged();
+        }
+    }
+
+    private void ToggleSelection(int requestId)
+    {
+        if (selectedRequests.Contains(requestId))
+            selectedRequests.Remove(requestId);
+        else
+            selectedRequests.Add(requestId);
+        
+        StateHasChanged();
+    }
+
+    private void ToggleSelectAll(ChangeEventArgs e)
+    {
+        if (bool.TryParse(e.Value?.ToString(), out bool selectAll))
+        {
+            selectedRequests.Clear();
+            if (selectAll && filteredRequests != null)
+            {
+                foreach (var request in GetPagedRequests().Where(r => r.Status == "Pending"))
+                {
+                    selectedRequests.Add(request.Id);
+                }
+            }
+            StateHasChanged();
+        }
+    }
+
+    private async Task QuickApprove(int requestId)
+    {
+        await OpenApprovalModal(requestId, true);
+    }
+
+    private async Task QuickReject(int requestId)
+    {
+        await OpenApprovalModal(requestId, false);
+    }
+
+    private async Task OpenApprovalModal(int requestId, bool approve)
+    {
+        selectedRequest = allRequests?.FirstOrDefault(r => r.Id == requestId);
+        if (selectedRequest != null)
+        {
+            isApproval = approve;
+            approvalComments = string.Empty;
+            isProcessing = false; // Reset processing flag
+            errorMessage = string.Empty; // Clear any previous errors
+            
+            // Use simpler approach - directly invoke the modal show
+            await JS.InvokeVoidAsync("showModal", "approvalModal");
+        }
+    }
+
+    private async Task ConfirmApproval()
+    {
+        if (selectedRequest == null || isProcessing) return;
+
+        isProcessing = true;
+        errorMessage = string.Empty;
+        StateHasChanged(); // Update UI to show disabled state
+
+        try
+        {
+            ServiceResponse<bool> result;
+            if (isApproval)
+            {
+                result = await LeaveService.ApproveLeaveRequestAsync(selectedRequest.Id, currentManagerId, 
+                    string.IsNullOrWhiteSpace(approvalComments) ? "Approved" : approvalComments);
+            }
+            else
+            {
+                if (string.IsNullOrWhiteSpace(approvalComments))
+                {
+                    errorMessage = "Please provide a reason for rejection.";
+                    return;
+                }
+                result = await LeaveService.RejectLeaveRequestAsync(selectedRequest.Id, currentManagerId, approvalComments);
+            }
+
+            if (result.IsSuccess)
+            {
+                successMessage = $"Leave request {(isApproval ? "approved" : "rejected")} successfully.";
+                await LoadData();
+                await JS.InvokeVoidAsync("hideModal", "approvalModal");
+            }
+            else
+            {
+                errorMessage = result.Message;
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error {(isApproval ? "approving" : "rejecting")} request: {ex.Message}";
+        }
+        finally
+        {
+            isProcessing = false;
+            StateHasChanged(); // Re-enable the button
+        }
+    }
+
+    private async Task BulkApprove()
+    {
+        if (selectedRequests.Any() && await JS.InvokeAsync<bool>("confirm", $"Approve {selectedRequests.Count} selected leave requests?"))
+        {
+            try
+            {
+                foreach (var requestId in selectedRequests.ToList())
+                {
+                    await LeaveService.ApproveLeaveRequestAsync(requestId, currentManagerId, "Bulk approval");
+                }
+                
+                successMessage = $"{selectedRequests.Count} leave requests approved successfully.";
+                selectedRequests.Clear();
+                await LoadData();
+            }
+            catch (Exception ex)
+            {
+                errorMessage = $"Error during bulk approval: {ex.Message}";
+            }
+        }
+    }
+
+    private async Task BulkReject()
+    {
+        if (selectedRequests.Any())
+        {
+            var reason = await JS.InvokeAsync<string>("prompt", "Please provide a reason for bulk rejection:");
+            if (!string.IsNullOrEmpty(reason))
+            {
+                try
+                {
+                    foreach (var requestId in selectedRequests.ToList())
+                    {
+                        await LeaveService.RejectLeaveRequestAsync(requestId, currentManagerId, reason);
+                    }
+                    
+                    successMessage = $"{selectedRequests.Count} leave requests rejected successfully.";
+                    selectedRequests.Clear();
+                    await LoadData();
+                }
+                catch (Exception ex)
+                {
+                    errorMessage = $"Error during bulk rejection: {ex.Message}";
+                }
+            }
+        }
+    }
+
+    private void ViewRequest(int requestId)
+    {
+        Navigation.NavigateTo($"/leave/request/{requestId}");
+    }
+
+    private async Task RefreshData()
+    {
+        await LoadData();
+        successMessage = "Data refreshed successfully.";
+    }
+}
+
+<script>
+    window.showModal = (modalId) => {
+        const modal = new bootstrap.Modal(document.getElementById(modalId));
+        modal.show();
+    };
+    
+    window.hideModal = (modalId) => {
+        const modalElement = document.getElementById(modalId);
+        const modal = bootstrap.Modal.getInstance(modalElement);
+        if (modal) {
+            modal.hide();
+        }
+    };
+</script>
