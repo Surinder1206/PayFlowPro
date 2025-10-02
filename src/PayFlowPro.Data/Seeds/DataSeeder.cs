@@ -41,7 +41,7 @@ public static class DataSeeder
             // Seed Leave Balances (after employees are created)
             await SeedLeaveBalancesAsync(context);
             await context.SaveChangesAsync();
-            
+
             // Fix any existing AccruedDays data issues (one-time fix)
             await FixAccruedDaysAsync(context);
         }
@@ -597,9 +597,9 @@ public static class DataSeeder
         // Find leave balances where AccruedDays equals AllocatedDays (the bug condition)
         // and they are new employees with no usage (UsedDays = 0, PendingDays = 0, CarriedOverDays = 0)
         var problematicBalances = await context.LeaveBalances
-            .Where(lb => lb.AccruedDays == lb.AllocatedDays 
-                        && lb.UsedDays == 0 
-                        && lb.PendingDays == 0 
+            .Where(lb => lb.AccruedDays == lb.AllocatedDays
+                        && lb.UsedDays == 0
+                        && lb.PendingDays == 0
                         && lb.CarriedOverDays == 0)
             .Include(lb => lb.Employee)
             .Include(lb => lb.LeaveType)
@@ -613,7 +613,7 @@ public static class DataSeeder
             {
                 var oldAccruedDays = balance.AccruedDays;
                 balance.AccruedDays = 0; // Reset to 0 as it should be for new employees
-                
+
                 Console.WriteLine($"DataSeeder: Fixed {balance.Employee.FirstName} {balance.Employee.LastName} - {balance.LeaveType.Name}: AccruedDays {oldAccruedDays} → 0");
             }
 

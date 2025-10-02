@@ -24,14 +24,14 @@ public class DataFixController : ControllerBase
         try
         {
             _logger.LogInformation("API call to fix accrued days initiated");
-            
+
             var updatedCount = await _dataFixService.FixAccruedDaysAsync();
-            
+
             await _dataFixService.LogLeaveBalancesAsync();
-            
-            return Ok(new { 
-                message = $"Successfully fixed {updatedCount} leave balance records", 
-                updatedCount = updatedCount 
+
+            return Ok(new {
+                message = $"Successfully fixed {updatedCount} leave balance records",
+                updatedCount = updatedCount
             });
         }
         catch (Exception ex)

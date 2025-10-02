@@ -19,33 +19,33 @@ namespace PayFlowPro.Core.Services
         Task<ServiceResponse<List<LeaveRequestDto>>> GetEmployeeLeaveRequestsAsync(int employeeId, int? financialYear = null);
         Task<ServiceResponse<List<LeaveRequestDto>>> GetPendingLeaveRequestsAsync();
         Task<ServiceResponse<List<LeaveRequestDto>>> GetPendingApprovalsAsync(string approverId);
-        
+
         // Leave Approval Operations
         Task<ServiceResponse<bool>> ApproveLeaveRequestAsync(int leaveRequestId, int approverId, string comments);
         Task<ServiceResponse<bool>> RejectLeaveRequestAsync(int leaveRequestId, int approverId, string comments);
         Task<ServiceResponse<bool>> DelegateApprovalAsync(int leaveRequestId, string fromApproverId, string toApproverId);
-        
+
         // Leave Balance Operations
         Task<ServiceResponse<LeaveSummaryDto>> GetEmployeeLeaveSummaryAsync(int employeeId, int? financialYear = null);
         Task<ServiceResponse<List<LeaveTypeBalanceDto>>> GetEmployeeLeaveBalancesAsync(int employeeId, int? financialYear = null);
         Task<ServiceResponse<bool>> UpdateLeaveBalanceAsync(UpdateLeaveBalanceDto balance);
         Task<ServiceResponse<bool>> InitializeLeaveBalancesAsync(int employeeId, int financialYear);
-        
+
         // Leave Type Operations
         Task<ServiceResponse<List<LeaveTypeDto>>> GetLeaveTypesAsync();
         Task<ServiceResponse<List<LeaveTypeDto>>> GetActiveLeaveTypesAsync();
         Task<ServiceResponse<LeaveTypeDto>> CreateLeaveTypeAsync(CreateLeaveTypeDto leaveType);
         Task<ServiceResponse<bool>> UpdateLeaveTypeAsync(int id, CreateLeaveTypeDto leaveType);
-        
+
         // Leave Analytics and Reporting
         Task<ServiceResponse<LeaveAnalyticsDto>> GetEmployeeLeaveAnalyticsAsync(int employeeId, int financialYear);
         Task<ServiceResponse<DepartmentLeaveAnalyticsDto>> GetDepartmentLeaveAnalyticsAsync(int departmentId, int financialYear);
         Task<ServiceResponse<LeaveReportDto>> GenerateLeaveReportAsync(LeaveReportFilterDto filters);
-        
+
         // Leave Accrual Operations
         Task<ServiceResponse<bool>> ProcessLeaveAccrualAsync(ProcessLeaveAccrualDto accrual);
         Task<ServiceResponse<List<LeaveAccrualDto>>> GetLeaveAccrualStatusAsync(int? employeeId = null);
-        
+
         // Validation and Business Logic
         Task<ServiceResponse<LeaveValidationResult>> ValidateLeaveRequestAsync(int employeeId, CreateLeaveRequestDto request);
         Task<ServiceResponse<decimal>> CalculateLeaveDaysAsync(DateTime startDate, DateTime endDate, bool isHalfDay);
@@ -121,7 +121,7 @@ namespace PayFlowPro.Core.Services
 
                 // Check for auto-approval eligibility
                 var autoApprovalResult = await _autoApprovalService.EvaluateLeaveRequestAsync(leaveRequest.Id);
-                
+
                 if (autoApprovalResult.IsApproved)
                 {
                     // Auto-approve the leave request
@@ -129,10 +129,10 @@ namespace PayFlowPro.Core.Services
                     leaveRequest.ReviewedAt = DateTime.UtcNow;
                     leaveRequest.ReviewedBy = "Auto-Approval System";
                     leaveRequest.ApproverComments = autoApprovalResult.ApprovalComments;
-                    
+
                     // Process the auto-approval (update balances, send notifications)
                     await _autoApprovalService.ProcessAutoApprovalAsync(leaveRequest.Id);
-                    
+
                     // Update leave balance - deduct from available and add to used
                     await ApproveLeaveBalanceUpdateAsync(request.EmployeeId, request.LeaveTypeId, currentYear, daysResult.Data);
                 }
@@ -140,7 +140,7 @@ namespace PayFlowPro.Core.Services
                 {
                     // Create manual approval workflow
                     await CreateApprovalWorkflowAsync(leaveRequest.Id, request.EmployeeId);
-                    
+
                     // Update leave balance pending days
                     await UpdatePendingDaysAsync(request.EmployeeId, request.LeaveTypeId, currentYear, daysResult.Data);
                 }
@@ -190,7 +190,7 @@ namespace PayFlowPro.Core.Services
                 var daysDifference = daysResult.Data - leaveRequest.DaysRequested;
                 if (daysDifference != 0)
                 {
-                    await UpdatePendingDaysAsync(leaveRequest.EmployeeId, leaveRequest.LeaveTypeId, 
+                    await UpdatePendingDaysAsync(leaveRequest.EmployeeId, leaveRequest.LeaveTypeId,
                         leaveRequest.FinancialYear, daysDifference);
                 }
 
@@ -243,7 +243,7 @@ namespace PayFlowPro.Core.Services
                 leaveRequest.UpdatedAt = DateTime.UtcNow;
 
                 // Restore pending days to available balance
-                await UpdatePendingDaysAsync(leaveRequest.EmployeeId, leaveRequest.LeaveTypeId, 
+                await UpdatePendingDaysAsync(leaveRequest.EmployeeId, leaveRequest.LeaveTypeId,
                     leaveRequest.FinancialYear, -leaveRequest.DaysRequested);
 
                 await _context.SaveChangesAsync();
@@ -279,7 +279,7 @@ namespace PayFlowPro.Core.Services
             try
             {
                 var currentYear = financialYear ?? GetFinancialYear(DateTime.Now);
-                
+
                 var leaveRequests = await _context.LeaveRequests
                     .Include(lr => lr.Employee)
                     .Include(lr => lr.LeaveType)
@@ -361,20 +361,20 @@ namespace PayFlowPro.Core.Services
         private async Task UpdatePendingDaysAsync(int employeeId, int leaveTypeId, int financialYear, decimal daysChange)
         {
             var leaveBalance = await _context.LeaveBalances
-                .FirstOrDefaultAsync(lb => lb.EmployeeId == employeeId && 
-                                          lb.LeaveTypeId == leaveTypeId && 
+                .FirstOrDefaultAsync(lb => lb.EmployeeId == employeeId &&
+                                          lb.LeaveTypeId == leaveTypeId &&
                                           lb.FinancialYear == financialYear);
 
             if (leaveBalance != null)
             {
                 // Recalculate pending days from all pending requests instead of using daysChange
                 var totalPendingDays = await _context.LeaveRequests
-                    .Where(lr => lr.EmployeeId == employeeId && 
-                               lr.LeaveTypeId == leaveTypeId && 
-                               lr.FinancialYear == financialYear && 
+                    .Where(lr => lr.EmployeeId == employeeId &&
+                               lr.LeaveTypeId == leaveTypeId &&
+                               lr.FinancialYear == financialYear &&
                                lr.Status == LeaveRequestStatus.Pending)
                     .SumAsync(lr => lr.DaysRequested);
-                
+
                 leaveBalance.PendingDays = totalPendingDays;
                 leaveBalance.UpdatedAt = DateTime.UtcNow;
             }
@@ -383,23 +383,23 @@ namespace PayFlowPro.Core.Services
         private async Task ApproveLeaveBalanceUpdateAsync(int employeeId, int leaveTypeId, int financialYear, decimal daysUsed)
         {
             var leaveBalance = await _context.LeaveBalances
-                .FirstOrDefaultAsync(lb => lb.EmployeeId == employeeId && 
-                                          lb.LeaveTypeId == leaveTypeId && 
+                .FirstOrDefaultAsync(lb => lb.EmployeeId == employeeId &&
+                                          lb.LeaveTypeId == leaveTypeId &&
                                           lb.FinancialYear == financialYear);
 
             if (leaveBalance != null)
             {
                 // Add to used days (cumulative)
                 leaveBalance.UsedDays += daysUsed;
-                
+
                 // Recalculate pending days from all pending requests
                 var totalPendingDays = await _context.LeaveRequests
-                    .Where(lr => lr.EmployeeId == employeeId && 
-                               lr.LeaveTypeId == leaveTypeId && 
-                               lr.FinancialYear == financialYear && 
+                    .Where(lr => lr.EmployeeId == employeeId &&
+                               lr.LeaveTypeId == leaveTypeId &&
+                               lr.FinancialYear == financialYear &&
                                lr.Status == LeaveRequestStatus.Pending)
                     .SumAsync(lr => lr.DaysRequested);
-                
+
                 leaveBalance.PendingDays = totalPendingDays;
                 leaveBalance.UpdatedAt = DateTime.UtcNow;
             }
@@ -490,7 +490,7 @@ namespace PayFlowPro.Core.Services
                     .Include(lr => lr.Employee)
                     .Include(lr => lr.LeaveType)
                     .FirstOrDefaultAsync(lr => lr.Id == leaveRequestId);
-                
+
                 if (leaveRequest == null)
                     return ServiceResponse<bool>.Failure("Leave request not found");
 
@@ -541,7 +541,7 @@ namespace PayFlowPro.Core.Services
                     .Include(lr => lr.Employee)
                     .Include(lr => lr.LeaveType)
                     .FirstOrDefaultAsync(lr => lr.Id == leaveRequestId);
-                
+
                 if (leaveRequest == null)
                     return ServiceResponse<bool>.Failure("Leave request not found");
 
@@ -585,22 +585,22 @@ namespace PayFlowPro.Core.Services
             }
         }
         public Task<ServiceResponse<bool>> DelegateApprovalAsync(int leaveRequestId, string fromApproverId, string toApproverId) => throw new NotImplementedException();
-        
+
         public async Task<ServiceResponse<LeaveSummaryDto>> GetEmployeeLeaveSummaryAsync(int employeeId, int? financialYear = null)
         {
             try
             {
                 var year = financialYear ?? GetFinancialYear(DateTime.Now);
-                
+
                 // Get employee gender for filtering leave types
                 var employee = await _context.Employees
                     .FirstOrDefaultAsync(e => e.Id == employeeId);
-                    
+
                 if (employee == null)
                 {
                     return ServiceResponse<LeaveSummaryDto>.Failure("Employee not found");
                 }
-                
+
                 var leaveBalances = await _context.LeaveBalances
                     .Include(lb => lb.LeaveType)
                     .Where(lb => lb.EmployeeId == employeeId && lb.FinancialYear == year)
@@ -608,7 +608,7 @@ namespace PayFlowPro.Core.Services
 
                 // Filter leave balances based on employee gender and leave type gender restrictions
                 // Also exclude Public Holiday from leave balance calculations
-                var filteredLeaveBalances = leaveBalances.Where(lb => 
+                var filteredLeaveBalances = leaveBalances.Where(lb =>
                     lb.LeaveType.Code != "PH" && // Exclude Public Holiday from calculations
                     (lb.LeaveType.GenderRestriction == null || // No restriction (applies to all)
                     (employee.Gender == Gender.Male && lb.LeaveType.GenderRestriction == LeaveGenderRestriction.Male) || // Male-only leave for males
@@ -656,16 +656,16 @@ namespace PayFlowPro.Core.Services
             try
             {
                 var year = financialYear ?? GetFinancialYear(DateTime.Now);
-                
+
                 // Get employee gender for filtering leave types
                 var employee = await _context.Employees
                     .FirstOrDefaultAsync(e => e.Id == employeeId);
-                    
+
                 if (employee == null)
                 {
                     return ServiceResponse<List<LeaveTypeBalanceDto>>.Failure("Employee not found");
                 }
-                
+
                 var leaveBalances = await _context.LeaveBalances
                     .Include(lb => lb.LeaveType)
                     .Where(lb => lb.EmployeeId == employeeId && lb.FinancialYear == year && lb.LeaveType.IsActive &&
@@ -702,7 +702,7 @@ namespace PayFlowPro.Core.Services
         }
         public Task<ServiceResponse<bool>> UpdateLeaveBalanceAsync(UpdateLeaveBalanceDto balance) => throw new NotImplementedException();
         public Task<ServiceResponse<bool>> InitializeLeaveBalancesAsync(int employeeId, int financialYear) => throw new NotImplementedException();
-        
+
         public async Task<ServiceResponse<List<LeaveTypeDto>>> GetLeaveTypesAsync()
         {
             try
@@ -825,7 +825,7 @@ namespace PayFlowPro.Core.Services
             {
                 var leaveRequest = await _context.LeaveRequests
                     .FirstOrDefaultAsync(lr => lr.Id == leaveRequestId);
-                
+
                 if (leaveRequest == null)
                     return ServiceResponse<bool>.Failure("Leave request not found");
 
@@ -845,7 +845,7 @@ namespace PayFlowPro.Core.Services
         }
 
         public Task<ServiceResponse<LeaveValidationResult>> ValidateLeaveRequestAsync(int employeeId, CreateLeaveRequestDto request) => throw new NotImplementedException();
-        
+
         public async Task<ServiceResponse<decimal>> CalculateLeaveDaysAsync(DateTime startDate, DateTime endDate, bool isHalfDay)
         {
             try
@@ -857,7 +857,7 @@ namespace PayFlowPro.Core.Services
 
                 var businessDays = 0;
                 var currentDate = startDate;
-                
+
                 while (currentDate <= endDate)
                 {
                     if (currentDate.DayOfWeek != DayOfWeek.Saturday && currentDate.DayOfWeek != DayOfWeek.Sunday)
@@ -866,7 +866,7 @@ namespace PayFlowPro.Core.Services
                     }
                     currentDate = currentDate.AddDays(1);
                 }
-                
+
                 return ServiceResponse<decimal>.Success(businessDays);
             }
             catch (Exception ex)
@@ -883,7 +883,7 @@ namespace PayFlowPro.Core.Services
                     .Include(lr => lr.Employee)
                         .ThenInclude(e => e.Department)
                     .Include(lr => lr.LeaveType)
-                    .Where(lr => 
+                    .Where(lr =>
                         (lr.StartDate <= toDate && lr.EndDate >= fromDate) && // Overlapping date range
                         lr.Status != LeaveRequestStatus.Draft); // Exclude draft requests
 
@@ -946,7 +946,7 @@ namespace PayFlowPro.Core.Services
             try
             {
                 var overlappingRequests = await _context.LeaveRequests
-                    .Where(lr => 
+                    .Where(lr =>
                         lr.EmployeeId == employeeId &&
                         lr.Status != LeaveRequestStatus.Cancelled &&
                         lr.Status != LeaveRequestStatus.Rejected &&
@@ -963,9 +963,9 @@ namespace PayFlowPro.Core.Services
                     var conflictDetails = overlappingRequests
                         .Select(lr => $"'{lr.LeaveType.Name}' from {lr.StartDate:dd/MM/yyyy} to {lr.EndDate:dd/MM/yyyy} (Status: {lr.Status})")
                         .ToList();
-                    
+
                     var message = $"Cannot create leave request due to overlapping dates. Existing leave request(s): {string.Join(", ", conflictDetails)}";
-                    
+
                     return ServiceResponse<bool>.Failure(message);
                 }
 

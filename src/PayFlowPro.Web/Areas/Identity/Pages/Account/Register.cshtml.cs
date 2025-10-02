@@ -73,21 +73,21 @@ namespace PayFlowPro.Web.Areas.Identity.Pages.Account
         {
             returnUrl ??= Url.Content("~/");
             ExternalLogins = (await _signInManager.GetExternalAuthenticationSchemesAsync()).ToList();
-            
+
             if (ModelState.IsValid)
             {
-                var user = new ApplicationUser 
-                { 
-                    UserName = Input.Email, 
+                var user = new ApplicationUser
+                {
+                    UserName = Input.Email,
                     Email = Input.Email,
                     FirstName = Input.FirstName,
                     LastName = Input.LastName,
                     EmailConfirmed = true, // For demo purposes - in production you'd send confirmation email
                     IsActive = true
                 };
-                
+
                 var result = await _userManager.CreateAsync(user, Input.Password);
-                
+
                 if (result.Succeeded)
                 {
                     _logger.LogInformation("User created a new account with password.");
@@ -101,7 +101,7 @@ namespace PayFlowPro.Web.Areas.Identity.Pages.Account
                     await _signInManager.SignInAsync(user, isPersistent: false);
                     return LocalRedirect(returnUrl);
                 }
-                
+
                 foreach (var error in result.Errors)
                 {
                     ModelState.AddModelError(string.Empty, error.Description);
@@ -118,7 +118,7 @@ namespace PayFlowPro.Web.Areas.Identity.Pages.Account
             {
                 // Get the default company (first company in the system)
                 var defaultCompany = await _context.Companies.FirstAsync();
-                
+
                 // Get or create a default department (look for HR or General department)
                 var defaultDepartment = await _context.Departments
                     .Where(d => d.Code == "HR" || d.Code == "GENERAL" || d.Name.Contains("General"))

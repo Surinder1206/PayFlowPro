@@ -21,10 +21,10 @@
                         <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
                     </div>
                 }
-                
+
                 <form id="profile-form" method="post">
                     <div asp-validation-summary="ModelOnly" class="text-danger"></div>
-                    
+
                     <div class="row mb-3">
                         <div class="col-md-6">
                             <label asp-for="Input.FirstName" class="form-label">First Name</label>
@@ -37,19 +37,19 @@
                             <span asp-validation-for="Input.LastName" class="text-danger"></span>
                         </div>
                     </div>
-                    
+
                     <div class="mb-3">
                         <label asp-for="Input.Email" class="form-label">Email</label>
                         <input asp-for="Input.Email" class="form-control" readonly />
                         <div class="form-text">Email cannot be changed.</div>
                     </div>
-                    
+
                     <div class="mb-3">
                         <label asp-for="Input.PhoneNumber" class="form-label">Phone Number</label>
                         <input asp-for="Input.PhoneNumber" class="form-control" />
                         <span asp-validation-for="Input.PhoneNumber" class="text-danger"></span>
                     </div>
-                    
+
                     <div class="d-grid gap-2 d-md-flex justify-content-md-between">
                         <a href="/" class="btn btn-outline-info">
                             <i class="fas fa-home"></i> Back to Home
