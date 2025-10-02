@@ -28,7 +28,7 @@
                     @if (currentEmployee != null)
                     {
                         <p class="text-muted">
-                            Editing: <strong>@currentEmployee.FirstName @currentEmployee.LastName</strong> 
+                            Editing: <strong>@currentEmployee.FirstName @currentEmployee.LastName</strong>
                             <span class="badge badge-secondary">@currentEmployee.EmployeeCode</span>
                         </p>
                     }
@@ -83,14 +83,14 @@
                     <div class="card-body">
                         <EditForm Model="@employeeDto" OnValidSubmit="@HandleValidSubmit">
                             <DataAnnotationsValidator />
-                            
+
                             <div class="row">
                                 <!-- Personal Information -->
                                 <div class="col-lg-8">
                                     <h5 class="mb-3 text-primary">
                                         <i class="fas fa-user"></i> Personal Information
                                     </h5>
-                                    
+
                                     <div class="row">
                                         <div class="col-md-6 mb-3">
                                             <label class="form-label">First Name <span class="text-danger">*</span></label>
@@ -153,7 +153,7 @@
                                     <h5 class="mb-3 text-primary mt-4">
                                         <i class="fas fa-briefcase"></i> Employment Information
                                     </h5>
-                                    
+
                                     <div class="row">
                                         <div class="col-md-6 mb-3">
                                             <label class="form-label">Job Title <span class="text-danger">*</span></label>
@@ -178,7 +178,7 @@
                                             @if (currentEmployee?.BasicSalary != employeeDto.BasicSalary)
                                             {
                                                 <div class="form-text">
-                                                    Previous salary: <strong>@currentEmployee?.BasicSalary.ToString("C")</strong>
+                                                    Previous salary: <strong><CurrencyDisplay Amount="currentEmployee.BasicSalary" /></strong>
                                                 </div>
                                             }
                                         </div>
@@ -213,7 +213,7 @@
                                     <h5 class="mb-3 text-primary mt-4">
                                         <i class="fas fa-address-card"></i> Additional Details
                                     </h5>
-                                    
+
                                     <div class="row">
                                         <div class="col-md-12 mb-3">
                                             <label class="form-label">Address</label>
@@ -327,10 +327,10 @@
 
     private UpdateEmployeeDto employeeDto = new();
     private Employee? currentEmployee = null;
-    
+
     private List<Department> departments = new();
     private List<Company> companies = new();
-    
+
     private bool isLoading = false;
     private bool isLoadingEmployee = true;
     private string? errorMessage = null;
@@ -348,7 +348,7 @@
     {
             isLoadingEmployee = true;
             currentEmployee = await EmployeeService.GetEmployeeByIdAsync(Id);
-            
+
             if (currentEmployee != null)
             {
                 // Populate the DTO with current employee data
@@ -392,7 +392,7 @@
         try
         {
             using var dbContext = await DbContextFactory.CreateDbContextAsync();
-            
+
             // Load departments
             departments = await dbContext.Departments
                 .Where(d => d.IsActive)
@@ -421,7 +421,7 @@
 
             // Get current user for audit trail
             var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
-            var currentUserId = authState.User?.FindFirst("sub")?.Value 
+            var currentUserId = authState.User?.FindFirst("sub")?.Value
                              ?? authState.User?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
                              ?? "system";
 
@@ -437,16 +437,16 @@
 
             // Update employee
             var updatedEmployee = await EmployeeService.UpdateEmployeeAsync(Id, employeeDto, currentUserId);
-            
+
             successMessage = $"Employee {updatedEmployee.FullName} ({updatedEmployee.EmployeeCode}) updated successfully!";
-            
+
             // Reload employee data to reflect changes
             currentEmployee = updatedEmployee;
-            
+
             // Show success message
             StateHasChanged();
             await Task.Delay(2000);
-            
+
             // Redirect to employee details page
             Navigation.NavigateTo($"/employees/{updatedEmployee.Id}");
         }

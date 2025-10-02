@@ -150,13 +150,13 @@
                                                 </div>
                                             </td>
                                             <td>
-                                                <strong>₹@payslip.BasicSalary.ToString("N0")</strong>
+                                                <strong><CurrencyDisplay Amount="payslip.BasicSalary" /></strong>
                                             </td>
                                             <td>
-                                                <strong>₹@payslip.GrossSalary.ToString("N0")</strong>
+                                                <strong><CurrencyDisplay Amount="payslip.GrossSalary" /></strong>
                                             </td>
                                             <td>
-                                                <strong class="text-success">₹@payslip.NetSalary.ToString("N0")</strong>
+                                                <strong class="text-success"><CurrencyDisplay Amount="payslip.NetSalary" /></strong>
                                             </td>
                                             <td>
                                                 <span class="badge @GetStatusBadgeClass(payslip.Status)">

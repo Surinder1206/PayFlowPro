@@ -42,6 +42,10 @@ public static class DataSeeder
             await SeedLeaveBalancesAsync(context);
             await context.SaveChangesAsync();
 
+            // Seed System Settings (currency configuration)
+            await SeedSystemSettingsAsync(context);
+            await context.SaveChangesAsync();
+
             // Fix any existing AccruedDays data issues (one-time fix)
             await FixAccruedDaysAsync(context);
         }
@@ -624,5 +628,44 @@ public static class DataSeeder
         {
             Console.WriteLine("DataSeeder: No AccruedDays issues found - data is correct");
         }
+    }
+
+    private static Task SeedSystemSettingsAsync(ApplicationDbContext context)
+    {
+        if (!context.SystemSettings.Any(s => s.Category == "Localization"))
+        {
+            var currencySettings = new[]
+            {
+                new SystemSetting
+                {
+                    Key = "Currency.Code",
+                    Value = "GBP",
+                    Category = "Localization",
+                    Description = "ISO 4217 currency code (e.g., GBP, USD, EUR)",
+                    DataType = "String"
+                },
+                new SystemSetting
+                {
+                    Key = "Currency.Culture",
+                    Value = "en-GB",
+                    Category = "Localization",
+                    Description = "Culture name for currency formatting (e.g., en-GB, en-US)",
+                    DataType = "String"
+                },
+                new SystemSetting
+                {
+                    Key = "Currency.Name",
+                    Value = "British Pound Sterling",
+                    Category = "Localization",
+                    Description = "Full currency name for display purposes",
+                    DataType = "String"
+                }
+            };
+
+            context.SystemSettings.AddRange(currencySettings);
+            Console.WriteLine("DataSeeder: Added currency configuration settings (GBP - British Pound Sterling)");
+        }
+
+        return Task.CompletedTask;
     }
 }

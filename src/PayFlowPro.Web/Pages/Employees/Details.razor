@@ -82,15 +82,15 @@ else
                                         <i class="fas fa-user fa-3x text-white"></i>
                                     </div>
                                 }
-                                
+
                                 <h4>@employee.FirstName @employee.LastName</h4>
                                 <p class="text-muted">@employee.JobTitle</p>
                                 <p class="text-muted">@(employee.Department?.Name ?? "No Department")</p>
-                                
+
                                 <div class="mt-3">
                                     <div class="row">
                                         <div class="col-6 text-center border-end">
-                                            <h6 class="mb-0">@employee.BasicSalary.ToString("C")</h6>
+                                            <h6 class="mb-0"><CurrencyDisplay Amount="employee.BasicSalary" /></h6>
                                             <small class="text-muted">Basic Salary</small>
                                         </div>
                                         <div class="col-6 text-center">
@@ -208,7 +208,7 @@ else
                                 <div class="row">
                                     <div class="col-12 mb-3">
                                         <label class="font-weight-bold">Basic Salary:</label>
-                                        <p class="h5 text-success">@employee.BasicSalary.ToString("C")</p>
+                                        <p class="h5 text-success"><CurrencyDisplay Amount="employee.BasicSalary" /></p>
                                     </div>
                                     <div class="col-12 mb-3">
                                         <label class="font-weight-bold">Bank Name:</label>
@@ -304,7 +304,7 @@ else
 
 @code {
     [Parameter] public int EmployeeId { get; set; }
-    
+
     private Employee? employee;
     private List<Payslip> recentPayslips = new();
     private bool isLoading = true;
@@ -319,15 +319,15 @@ else
         try
         {
             isLoading = true;
-            
+
             using var dbContext = await DbContextFactory.CreateDbContextAsync();
-            
+
             employee = await dbContext.Employees
                 .Include(e => e.Department)
                 .Include(e => e.Company)
                 .Include(e => e.User)
                 .FirstOrDefaultAsync(e => e.Id == EmployeeId);
-            
+
             if (employee != null)
             {
                 recentPayslips = await dbContext.Payslips

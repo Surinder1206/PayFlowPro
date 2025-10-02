@@ -22,18 +22,21 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<EmployeeDeduction> EmployeeDeductions { get; set; }
     public DbSet<PayslipAllowance> PayslipAllowances { get; set; }
     public DbSet<PayslipDeduction> PayslipDeductions { get; set; }
-    
+
+    // System configuration
+    public DbSet<SystemSetting> SystemSettings { get; set; }
+
     // Audit entities
     public DbSet<AuditLog> AuditLogs { get; set; }
     public DbSet<SecurityEvent> SecurityEvents { get; set; }
     public DbSet<UserSession> UserSessions { get; set; }
     public DbSet<DataChangeLog> DataChangeLogs { get; set; }
-    
+
     // Employee profile entities
     public DbSet<EmergencyContact> EmergencyContacts { get; set; }
     public DbSet<ProfileChangeRequest> ProfileChangeRequests { get; set; }
     public DbSet<SalaryHistory> SalaryHistories { get; set; }
-    
+
     // Leave management entities
     public DbSet<LeaveType> LeaveTypes { get; set; }
     public DbSet<LeaveBalance> LeaveBalances { get; set; }
@@ -311,58 +314,58 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
         modelBuilder.Entity<Department>()
             .HasIndex(d => new { d.CompanyId, d.Code })
             .IsUnique();
-        
+
         // Configure audit entity relationships
         modelBuilder.Entity<AuditLog>()
             .HasOne(al => al.User)
             .WithMany()
             .HasForeignKey(al => al.UserId)
             .OnDelete(DeleteBehavior.Restrict);
-            
+
         modelBuilder.Entity<SecurityEvent>()
             .HasOne(se => se.User)
             .WithMany()
             .HasForeignKey(se => se.UserId)
             .OnDelete(DeleteBehavior.SetNull);
-            
+
         modelBuilder.Entity<UserSession>()
             .HasOne(us => us.User)
             .WithMany()
             .HasForeignKey(us => us.UserId)
             .OnDelete(DeleteBehavior.Cascade);
-            
+
         modelBuilder.Entity<DataChangeLog>()
             .HasOne(dcl => dcl.User)
             .WithMany()
             .HasForeignKey(dcl => dcl.UserId)
             .OnDelete(DeleteBehavior.Restrict);
-        
+
         // Configure audit indexes for performance
         modelBuilder.Entity<AuditLog>()
             .HasIndex(al => al.CreatedAt);
-            
+
         modelBuilder.Entity<AuditLog>()
             .HasIndex(al => new { al.UserId, al.CreatedAt });
-            
+
         modelBuilder.Entity<AuditLog>()
             .HasIndex(al => new { al.EntityType, al.EntityId });
-            
+
         modelBuilder.Entity<SecurityEvent>()
             .HasIndex(se => se.CreatedAt);
-            
+
         modelBuilder.Entity<SecurityEvent>()
             .HasIndex(se => new { se.EventType, se.CreatedAt });
-            
+
         modelBuilder.Entity<UserSession>()
             .HasIndex(us => us.SessionId)
             .IsUnique();
-            
+
         modelBuilder.Entity<UserSession>()
             .HasIndex(us => new { us.UserId, us.LoginTime });
-            
+
         modelBuilder.Entity<DataChangeLog>()
             .HasIndex(dcl => dcl.ChangeTime);
-            
+
         modelBuilder.Entity<DataChangeLog>()
             .HasIndex(dcl => new { dcl.EntityType, dcl.EntityId, dcl.ChangeTime });
 

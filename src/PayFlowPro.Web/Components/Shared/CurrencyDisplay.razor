@@ -1,0 +1,34 @@
+@using PayFlowPro.Core.Interfaces
+@inject ICurrencyService CurrencyService
+
+@if (FormattedAmount != null)
+{
+    <span>@FormattedAmount</span>
+}
+else
+{
+    <span>Loading...</span>
+}
+
+@code {
+    [Parameter] public decimal Amount { get; set; }
+    [Parameter] public bool ShowCode { get; set; } = false;
+    [Parameter] public string? CssClass { get; set; }
+
+    private string? FormattedAmount;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        try
+        {
+            FormattedAmount = ShowCode
+                ? await CurrencyService.FormatCurrencyWithCodeAsync(Amount)
+                : await CurrencyService.FormatCurrencyAsync(Amount);
+        }
+        catch (Exception)
+        {
+            // Fallback formatting if service fails
+            FormattedAmount = Amount.ToString("C");
+        }
+    }
+}
