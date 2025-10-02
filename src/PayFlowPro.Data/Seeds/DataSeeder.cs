@@ -41,6 +41,9 @@ public static class DataSeeder
             // Seed Leave Balances (after employees are created)
             await SeedLeaveBalancesAsync(context);
             await context.SaveChangesAsync();
+            
+            // Fix any existing AccruedDays data issues (one-time fix)
+            await FixAccruedDaysAsync(context);
         }
         catch (Exception ex)
         {
@@ -586,4 +589,40 @@ public static class DataSeeder
                 Console.WriteLine("DataSeeder: Successfully seeded leave balances.");
             }
         }
+
+        private static async Task FixAccruedDaysAsync(ApplicationDbContext context)
+    {
+        Console.WriteLine("DataSeeder: Checking for AccruedDays data issues...");
+
+        // Find leave balances where AccruedDays equals AllocatedDays (the bug condition)
+        // and they are new employees with no usage (UsedDays = 0, PendingDays = 0, CarriedOverDays = 0)
+        var problematicBalances = await context.LeaveBalances
+            .Where(lb => lb.AccruedDays == lb.AllocatedDays 
+                        && lb.UsedDays == 0 
+                        && lb.PendingDays == 0 
+                        && lb.CarriedOverDays == 0)
+            .Include(lb => lb.Employee)
+            .Include(lb => lb.LeaveType)
+            .ToListAsync();
+
+        if (problematicBalances.Any())
+        {
+            Console.WriteLine($"DataSeeder: Found {problematicBalances.Count} leave balances to fix");
+
+            foreach (var balance in problematicBalances)
+            {
+                var oldAccruedDays = balance.AccruedDays;
+                balance.AccruedDays = 0; // Reset to 0 as it should be for new employees
+                
+                Console.WriteLine($"DataSeeder: Fixed {balance.Employee.FirstName} {balance.Employee.LastName} - {balance.LeaveType.Name}: AccruedDays {oldAccruedDays} → 0");
+            }
+
+            var updatedCount = await context.SaveChangesAsync();
+            Console.WriteLine($"DataSeeder: Successfully fixed {updatedCount} leave balance records");
+        }
+        else
+        {
+            Console.WriteLine("DataSeeder: No AccruedDays issues found - data is correct");
+        }
     }
+}

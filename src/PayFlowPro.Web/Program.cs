@@ -59,6 +59,7 @@ builder.Services.AddScoped<ILeaveManagementService, LeaveManagementService>();
 builder.Services.AddScoped<IAutoApprovalService, AutoApprovalService>();
 builder.Services.AddScoped<IEmployeeIdentityService, EmployeeIdentityService>();
 builder.Services.AddScoped<IEmailService, EmailService>();
+builder.Services.AddScoped<PayFlowPro.Web.Services.DataFixService>();
 
 var app = builder.Build();
 
