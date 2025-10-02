@@ -78,12 +78,11 @@ public static class DataSeeder
         {
             company = new Company
             {
-                Name = "Demo Company Ltd",
-                Address = "123 Business Street, Business City, BC 12345",
-                PhoneNumber = "+1-555-123-4567",
-                Email = "info@democompany.com",
-                TaxId = "TAX123456789",
-                RegistrationNumber = "REG987654321",
+                Name = "SITA Information Networking Computing UK",
+                Address = "Level 5, Block A-C, Apex, Forbury Road, Reading, England RG1 1AX",
+                PhoneNumber = "+44-800 026 0142",
+                Email = "support@sita.aero",
+                RegistrationNumber = "03995063",
                 IsActive = true
             };
 
