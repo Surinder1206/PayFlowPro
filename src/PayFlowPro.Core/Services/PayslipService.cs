@@ -23,11 +23,14 @@ public class PayslipService : IPayslipService
     public async Task<Payslip> GeneratePayslipAsync(int employeeId, DateTime payPeriodStart, DateTime payPeriodEnd)
     {
         using var context = _contextFactory.CreateDbContext();
-        
+
+        // Validate date range
+        ValidatePayPeriod(payPeriodStart, payPeriodEnd);
+
         // Check if payslip already exists for this period
         var existingPayslip = await context.Payslips
-            .FirstOrDefaultAsync(p => p.EmployeeId == employeeId 
-                && p.PayPeriodStart == payPeriodStart 
+            .FirstOrDefaultAsync(p => p.EmployeeId == employeeId
+                && p.PayPeriodStart == payPeriodStart
                 && p.PayPeriodEnd == payPeriodEnd);
 
         if (existingPayslip != null)
@@ -44,10 +47,21 @@ public class PayslipService : IPayslipService
             throw new ArgumentException($"Employee with ID {employeeId} not found.");
         }
 
-        // Calculate payslip components
+        // Calculate payslip components first (this can throw exceptions)
         var calculation = await _calculationService.CalculatePayslipAsync(employeeId, payPeriodStart, payPeriodEnd);
 
-        // Create payslip
+        // Validate calculation results
+        if (calculation == null)
+        {
+            throw new InvalidOperationException("Failed to calculate payslip components.");
+        }
+
+        if (calculation.NetSalary < 0)
+        {
+            throw new InvalidOperationException("Net salary cannot be negative. Please check deductions and allowances.");
+        }
+
+        // Create payslip object but don't add to context yet
         var payslip = new Payslip
         {
             PayslipNumber = await GeneratePayslipNumberAsync(employeeId, payPeriodStart),
@@ -68,20 +82,19 @@ public class PayslipService : IPayslipService
             UpdatedAt = DateTime.UtcNow
         };
 
-        // Add payslip to context first
-        context.Payslips.Add(payslip);
-        
-        // Add allowances to the payslip's collection
+        // Prepare allowances and deductions (but don't save yet)
         foreach (var allowance in calculation.Allowances)
         {
             payslip.PayslipAllowances.Add(allowance);
         }
 
-        // Add deductions to the payslip's collection
         foreach (var deduction in calculation.Deductions)
         {
             payslip.PayslipDeductions.Add(deduction);
         }
+
+        // Only add to context after all validations pass
+        context.Payslips.Add(payslip);
 
         // Save everything in one transaction with retry logic for duplicate key errors
         var maxRetries = 3;
@@ -96,7 +109,7 @@ public class PayslipService : IPayslipService
             {
                 if (attempt == maxRetries)
                     throw new InvalidOperationException($"Unable to generate unique payslip number after {maxRetries} attempts. Please try again.");
-                
+
                 // Regenerate payslip number and try again
                 payslip.PayslipNumber = await GeneratePayslipNumberAsync(employeeId, payPeriodStart);
             }
@@ -109,7 +122,7 @@ public class PayslipService : IPayslipService
     public async Task<Payslip?> GetPayslipByIdAsync(int payslipId)
     {
         using var context = _contextFactory.CreateDbContext();
-        
+
         return await context.Payslips
             .Include(p => p.Employee)
                 .ThenInclude(e => e.Department)
@@ -125,7 +138,7 @@ public class PayslipService : IPayslipService
     public async Task<List<Payslip>> GetPayslipsByEmployeeAsync(int employeeId, int? year = null, int? month = null)
     {
         using var context = _contextFactory.CreateDbContext();
-        
+
         var query = context.Payslips
             .Include(p => p.Employee)
             .Include(p => p.PayslipAllowances)
@@ -152,7 +165,7 @@ public class PayslipService : IPayslipService
     public async Task<List<Payslip>> GetPayslipsForPeriodAsync(DateTime startDate, DateTime endDate)
     {
         using var context = _contextFactory.CreateDbContext();
-        
+
         return await context.Payslips
             .Include(p => p.Employee)
                 .ThenInclude(e => e.Department)
@@ -165,7 +178,7 @@ public class PayslipService : IPayslipService
     public async Task<Payslip> ApprovePayslipAsync(int payslipId, string approvedBy)
     {
         using var context = _contextFactory.CreateDbContext();
-        
+
         var payslip = await context.Payslips.FindAsync(payslipId);
         if (payslip == null)
         {
@@ -189,7 +202,7 @@ public class PayslipService : IPayslipService
     public async Task<Payslip> UpdatePayslipStatusAsync(int payslipId, PayslipStatus status)
     {
         using var context = _contextFactory.CreateDbContext();
-        
+
         var payslip = await context.Payslips.FindAsync(payslipId);
         if (payslip == null)
         {
@@ -211,7 +224,7 @@ public class PayslipService : IPayslipService
     public async Task<bool> DeletePayslipAsync(int payslipId)
     {
         using var context = _contextFactory.CreateDbContext();
-        
+
         var payslip = await context.Payslips
             .Include(p => p.PayslipAllowances)
             .Include(p => p.PayslipDeductions)
@@ -239,20 +252,20 @@ public class PayslipService : IPayslipService
     public async Task<string> GeneratePayslipNumberAsync(int employeeId, DateTime payPeriod)
     {
         using var context = _contextFactory.CreateDbContext();
-        
+
         var employee = await context.Employees.FindAsync(employeeId);
         var employeeCode = employee?.EmployeeCode ?? employeeId.ToString("D6");
-        
+
         var year = payPeriod.Year;
         var month = payPeriod.Month;
-        
+
         // Use a more robust approach to avoid race conditions
         var baseNumber = $"PS-{employeeCode}-{year:D4}{month:D2}";
-        
+
         // Find all existing payslip numbers for this employee and month
         var existingNumbers = await context.Payslips
-            .Where(p => p.EmployeeId == employeeId 
-                && p.PayPeriodStart.Year == year 
+            .Where(p => p.EmployeeId == employeeId
+                && p.PayPeriodStart.Year == year
                 && p.PayPeriodStart.Month == month)
             .Select(p => p.PayslipNumber)
             .ToListAsync();
@@ -265,5 +278,40 @@ public class PayslipService : IPayslipService
         }
 
         return $"{baseNumber}-{sequence:D3}";
+    }
+
+    private void ValidatePayPeriod(DateTime payPeriodStart, DateTime payPeriodEnd)
+    {
+        // Basic date validation
+        if (payPeriodStart >= payPeriodEnd)
+        {
+            throw new ArgumentException("Pay period start date must be before end date.");
+        }
+
+        // Check for future dates (allow current month + 1 for advance generation)
+        var maxAllowedDate = DateTime.Today.AddMonths(1).AddDays(DateTime.DaysInMonth(DateTime.Today.AddMonths(1).Year, DateTime.Today.AddMonths(1).Month) - DateTime.Today.AddMonths(1).Day);
+        if (payPeriodStart > maxAllowedDate)
+        {
+            throw new ArgumentException("Cannot generate payslips more than 1 month in advance.");
+        }
+
+        // Check if period spans multiple months (business rule)
+        if (payPeriodStart.Month != payPeriodEnd.Month || payPeriodStart.Year != payPeriodEnd.Year)
+        {
+            throw new ArgumentException("Payslip period cannot span multiple months. Please generate separate payslips for each month.");
+        }
+
+        // Check for excessively long periods (more than 31 days)
+        var periodDays = (payPeriodEnd - payPeriodStart).Days + 1;
+        if (periodDays > 31)
+        {
+            throw new ArgumentException("Pay period cannot exceed 31 days.");
+        }
+
+        // Check for very short periods (less than 7 days) - might be an error
+        if (periodDays < 7)
+        {
+            throw new ArgumentException("Pay period should be at least 7 days. For partial periods, please verify the dates are correct.");
+        }
     }
 }

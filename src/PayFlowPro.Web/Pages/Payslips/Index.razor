@@ -269,20 +269,44 @@
                         <div class="col-md-3">
                             <div class="mb-3">
                                 <label class="form-label">Pay Period Start *</label>
-                                <input type="date" class="form-control" @bind="generateModel.PayPeriodStart" required />
+                                <input type="date" class="form-control @(dateValidationError ? "is-invalid" : "")"
+                                       @bind="generateModel.PayPeriodStart"
+                                       @bind:after="ValidateDateRange"
+                                       required />
                             </div>
                         </div>
                         <div class="col-md-3">
                             <div class="mb-3">
                                 <label class="form-label">Pay Period End *</label>
-                                <input type="date" class="form-control" @bind="generateModel.PayPeriodEnd" required />
+                                <input type="date" class="form-control @(dateValidationError ? "is-invalid" : "")"
+                                       @bind="generateModel.PayPeriodEnd"
+                                       @bind:after="ValidateDateRange"
+                                       required />
                             </div>
                         </div>
                     </div>
 
+                    @if (dateValidationError)
+                    {
+                        <div class="alert alert-warning mb-3">
+                            <i class="fas fa-exclamation-triangle me-2"></i>
+                            @dateValidationMessage
+                        </div>
+                    }
+
+                    <div class="alert alert-info mb-3">
+                        <i class="fas fa-info-circle me-2"></i>
+                        <strong>Guidelines:</strong>
+                        <ul class="mb-0 mt-2">
+                            <li>Pay period must be within a single month</li>
+                            <li>Period should be 7-31 days long</li>
+                            <li>Cannot generate payslips more than 1 month in advance</li>
+                        </ul>
+                    </div>
+
                     <div class="d-flex justify-content-end gap-2">
                         <button type="button" class="btn btn-secondary" @onclick="HideGenerateModal">Cancel</button>
-                        <button type="submit" class="btn btn-success" disabled="@isGenerating" @onclick="GeneratePayslip">
+                        <button type="submit" class="btn btn-success" disabled="@(isGenerating || dateValidationError)">
                             @if (isGenerating)
                             {
                                 <span class="spinner-border spinner-border-sm me-2"></span>
@@ -324,6 +348,10 @@
 
     // Generate model
     private GeneratePayslipModel generateModel = new();
+
+    // Validation properties
+    private bool dateValidationError = false;
+    private string dateValidationMessage = "";
 
     protected override async Task OnInitializedAsync()
     {
@@ -455,9 +483,23 @@
 
     private async Task GeneratePayslip()
     {
+        // Prevent double-submission
+        if (isGenerating)
+        {
+            return;
+        }
+
         if (generateModel.EmployeeId == 0)
         {
             await JSRuntime.InvokeVoidAsync("alert", "Please select an employee");
+            return;
+        }
+
+        // Validate dates before proceeding
+        ValidateDateRange();
+        if (dateValidationError)
+        {
+            await JSRuntime.InvokeVoidAsync("alert", $"Invalid date range: {dateValidationMessage}");
             return;
         }
 
@@ -488,6 +530,70 @@
         }
     }
 
+    private void ValidateDateRange()
+    {
+        dateValidationError = false;
+        dateValidationMessage = "";
+
+        if (generateModel.PayPeriodStart == default || generateModel.PayPeriodEnd == default)
+        {
+            return; // Don't validate if dates are not set yet
+        }
+
+        try
+        {
+            // Basic date validation
+            if (generateModel.PayPeriodStart >= generateModel.PayPeriodEnd)
+            {
+                dateValidationError = true;
+                dateValidationMessage = "Pay period start date must be before end date.";
+                return;
+            }
+
+            // Check if period spans multiple months
+            if (generateModel.PayPeriodStart.Month != generateModel.PayPeriodEnd.Month ||
+                generateModel.PayPeriodStart.Year != generateModel.PayPeriodEnd.Year)
+            {
+                dateValidationError = true;
+                dateValidationMessage = "Pay period cannot span multiple months. Please generate separate payslips for each month.";
+                return;
+            }
+
+            // Check for excessively long periods
+            var periodDays = (generateModel.PayPeriodEnd - generateModel.PayPeriodStart).Days + 1;
+            if (periodDays > 31)
+            {
+                dateValidationError = true;
+                dateValidationMessage = "Pay period cannot exceed 31 days.";
+                return;
+            }
+
+            // Check for very short periods
+            if (periodDays < 7)
+            {
+                dateValidationError = true;
+                dateValidationMessage = "Pay period should be at least 7 days. For partial periods, please verify the dates are correct.";
+                return;
+            }
+
+            // Check for future dates
+            var maxAllowedDate = DateTime.Today.AddMonths(1).AddDays(DateTime.DaysInMonth(DateTime.Today.AddMonths(1).Year, DateTime.Today.AddMonths(1).Month) - DateTime.Today.AddMonths(1).Day);
+            if (generateModel.PayPeriodStart > maxAllowedDate)
+            {
+                dateValidationError = true;
+                dateValidationMessage = "Cannot generate payslips more than 1 month in advance.";
+                return;
+            }
+        }
+        catch (Exception)
+        {
+            dateValidationError = true;
+            dateValidationMessage = "Invalid date format.";
+        }
+
+        StateHasChanged();
+    }
+
     private async Task ViewPayslip(int payslipId)
     {
         Navigation.NavigateTo($"/payslips/{payslipId}");
@@ -499,13 +605,13 @@
         {
             using var context = DbContextFactory.CreateDbContext();
             var payslip = await context.Payslips.FindAsync(payslipId);
-            
+
             if (payslip != null)
             {
                 payslip.Status = PayslipStatus.Approved;
                 payslip.ApprovedAt = DateTime.UtcNow;
                 payslip.ApprovedBy = "Current User"; // TODO: Get actual user
-                
+
                 await context.SaveChangesAsync();
                 await JSRuntime.InvokeVoidAsync("alert", "Payslip approved successfully!");
                 await LoadPayslips();
@@ -523,12 +629,12 @@
         {
             using var context = DbContextFactory.CreateDbContext();
             var payslip = await context.Payslips.FindAsync(payslipId);
-            
+
             if (payslip != null)
             {
                 payslip.Status = PayslipStatus.Sent;
                 payslip.EmailSentAt = DateTime.UtcNow;
-                
+
                 await context.SaveChangesAsync();
                 await JSRuntime.InvokeVoidAsync("alert", "Payslip sent successfully!");
                 await LoadPayslips();
@@ -562,7 +668,7 @@
             {
                 using var context = DbContextFactory.CreateDbContext();
                 var payslip = await context.Payslips.FindAsync(payslipId);
-                
+
                 if (payslip != null)
                 {
                     context.Payslips.Remove(payslip);
@@ -596,7 +702,7 @@
         var daysInMonth = DateTime.DaysInMonth(payPeriodStart.Year, payPeriodStart.Month);
         var workingDays = (payPeriodEnd - payPeriodStart).Days + 1;
         var proRataFactor = (decimal)workingDays / daysInMonth;
-        
+
         return employee.BasicSalary * proRataFactor;
     }
 
@@ -618,12 +724,12 @@
     private decimal CalculateTaxAmount(decimal grossSalary)
     {
         var annualSalary = grossSalary * 12;
-        
+
         decimal tax = 0;
         if (annualSalary > 100000) tax += (annualSalary - 100000) * 0.35m;
         if (annualSalary > 50000) tax += Math.Min(annualSalary - 50000, 50000) * 0.25m;
         if (annualSalary > 20000) tax += Math.Min(annualSalary - 20000, 30000) * 0.15m;
-        
+
         return tax / 12; // Monthly tax
     }
 
