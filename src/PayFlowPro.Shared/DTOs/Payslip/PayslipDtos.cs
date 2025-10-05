@@ -10,25 +10,25 @@ namespace PayFlowPro.Shared.DTOs.Payslip
         public string EmployeeNumber { get; set; } = string.Empty;
         public string Department { get; set; } = string.Empty;
         public string Position { get; set; } = string.Empty;
-        
+
         public DateTime PayPeriodStart { get; set; }
         public DateTime PayPeriodEnd { get; set; }
         public DateTime PayDate { get; set; }
-        
+
         public decimal BaseSalary { get; set; }
         public decimal HourlyRate { get; set; }
         public decimal HoursWorked { get; set; }
         public decimal OvertimeHours { get; set; }
         public decimal OvertimeRate { get; set; }
-        
+
         public decimal GrossPay { get; set; }
         public decimal TotalAllowances { get; set; }
         public decimal TotalDeductions { get; set; }
         public decimal NetPay { get; set; }
-        
+
         public List<PayslipAllowanceDto> Allowances { get; set; } = new();
         public List<PayslipDeductionDto> Deductions { get; set; } = new();
-        
+
         public string Status { get; set; } = string.Empty;
         public string? Notes { get; set; }
         public DateTime CreatedAt { get; set; }
@@ -57,18 +57,18 @@ namespace PayFlowPro.Shared.DTOs.Payslip
     {
         [Required]
         public int EmployeeId { get; set; }
-        
+
         [Required]
         public DateTime PayPeriodStart { get; set; }
-        
+
         [Required]
         public DateTime PayPeriodEnd { get; set; }
-        
+
         public DateTime? PayDate { get; set; }
         public decimal HoursWorked { get; set; } = 160;
         public decimal OvertimeHours { get; set; } = 0;
         public string? Notes { get; set; }
-        
+
         public List<CreatePayslipAllowanceDto> Allowances { get; set; } = new();
         public List<CreatePayslipDeductionDto> Deductions { get; set; } = new();
     }
@@ -77,7 +77,7 @@ namespace PayFlowPro.Shared.DTOs.Payslip
     {
         [Required]
         public int AllowanceTypeId { get; set; }
-        
+
         [Required]
         [Range(0.01, double.MaxValue, ErrorMessage = "Amount must be greater than 0")]
         public decimal Amount { get; set; }
@@ -87,7 +87,7 @@ namespace PayFlowPro.Shared.DTOs.Payslip
     {
         [Required]
         public int DeductionTypeId { get; set; }
-        
+
         [Required]
         [Range(0.01, double.MaxValue, ErrorMessage = "Amount must be greater than 0")]
         public decimal Amount { get; set; }
@@ -97,13 +97,13 @@ namespace PayFlowPro.Shared.DTOs.Payslip
     {
         [Required]
         public int EmployeeId { get; set; }
-        
+
         [Required]
         public DateTime PayPeriodStart { get; set; }
-        
+
         [Required]
         public DateTime PayPeriodEnd { get; set; }
-        
+
         public decimal HoursWorked { get; set; } = 160;
         public decimal OvertimeHours { get; set; } = 0;
         public string? Notes { get; set; }

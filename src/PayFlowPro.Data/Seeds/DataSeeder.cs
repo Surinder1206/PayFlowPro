@@ -99,7 +99,7 @@ public static class DataSeeder
             company.Email = "support@sita.aero";
             company.RegistrationNumber = "03995063";
             company.UpdatedAt = DateTime.UtcNow;
-            
+
             await context.SaveChangesAsync();
         }
 

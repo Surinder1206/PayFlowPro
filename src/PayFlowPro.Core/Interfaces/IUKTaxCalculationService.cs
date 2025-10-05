@@ -12,7 +12,7 @@ public interface IUKTaxCalculationService
     /// <param name="payFrequency">Pay frequency (Monthly, Weekly, etc.)</param>
     /// <returns>Tax amount for the specified pay period</returns>
     decimal CalculateIncomeTax(decimal annualGrossSalary, string taxCode = "1257L", PayFrequency payFrequency = PayFrequency.Monthly);
-    
+
     /// <summary>
     /// Calculate UK National Insurance contributions (Class 1) for 2024-25 tax year
     /// </summary>
@@ -20,7 +20,7 @@ public interface IUKTaxCalculationService
     /// <param name="payFrequency">Pay frequency (Monthly, Weekly, etc.)</param>
     /// <returns>National Insurance amount for the specified pay period</returns>
     decimal CalculateNationalInsurance(decimal annualGrossSalary, PayFrequency payFrequency = PayFrequency.Monthly);
-    
+
     /// <summary>
     /// Calculate total UK deductions (Income Tax + National Insurance)
     /// </summary>
@@ -29,7 +29,7 @@ public interface IUKTaxCalculationService
     /// <param name="payFrequency">Pay frequency (Monthly, Weekly, etc.)</param>
     /// <returns>Breakdown of all UK tax deductions</returns>
     UKTaxCalculationResult CalculateUKTaxDeductions(decimal annualGrossSalary, string taxCode = "1257L", PayFrequency payFrequency = PayFrequency.Monthly);
-    
+
     /// <summary>
     /// Get personal allowance for the current tax year
     /// </summary>
@@ -53,7 +53,7 @@ public class UKTaxCalculationResult
     public decimal TaxableIncome { get; set; }
     public string TaxCode { get; set; } = string.Empty;
     public PayFrequency PayFrequency { get; set; }
-    
+
     // Breakdown details
     public decimal BasicRateTax { get; set; }
     public decimal HigherRateTax { get; set; }

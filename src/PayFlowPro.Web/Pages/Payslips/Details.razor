@@ -428,7 +428,7 @@
             }
 
             payslip = await query.FirstOrDefaultAsync();
-            
+
             // TODO: Calculate UK tax breakdown if payslip exists and has tax amount
             // if (payslip != null && payslip.TaxAmount > 0)
             // {
@@ -436,10 +436,10 @@
             //     {
             //         // Convert monthly gross salary to annual for UK tax calculations
             //         decimal annualGrossSalary = payslip.GrossSalary * 12;
-            //         
+            //
             //         // Calculate UK taxes using the dedicated tax service for monthly period
             //         var ukTaxResult = UKTaxService.CalculateUKTaxDeductions(annualGrossSalary, "1257L", PayFrequency.Monthly);
-            //         
+            //
             //         // Store the breakdown
             //         taxBreakdown = (ukTaxResult.IncomeTax, ukTaxResult.NationalInsurance);
             //     }
