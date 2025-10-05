@@ -80,7 +80,7 @@ public static class DataSeeder
             {
                 Name = "SITA Information Networking Computing UK",
                 Address = "Level 5, Block A-C, Apex, Forbury Road, Reading, England RG1 1AX",
-                PhoneNumber = "+44-800 026 0142",
+                PhoneNumber = "+44 8000260142",
                 Email = "support@sita.aero",
                 RegistrationNumber = "03995063",
                 IsActive = true
@@ -91,7 +91,16 @@ public static class DataSeeder
         }
         else
         {
+            // Update existing company with SITA information
             company = await context.Companies.FirstAsync();
+            company.Name = "SITA Information Networking Computing UK";
+            company.Address = "Level 5, Block A-C, Apex, Forbury Road, Reading, England RG1 1AX";
+            company.PhoneNumber = "+44 8000260142";
+            company.Email = "support@sita.aero";
+            company.RegistrationNumber = "03995063";
+            company.UpdatedAt = DateTime.UtcNow;
+            
+            await context.SaveChangesAsync();
         }
 
         // Always check and seed departments

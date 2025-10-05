@@ -9,10 +9,14 @@ namespace PayFlowPro.Core.Services;
 public class PayslipCalculationService : IPayslipCalculationService
 {
     private readonly IDbContextFactory<ApplicationDbContext> _contextFactory;
+    private readonly IUKTaxCalculationService _ukTaxService;
 
-    public PayslipCalculationService(IDbContextFactory<ApplicationDbContext> contextFactory)
+    public PayslipCalculationService(
+        IDbContextFactory<ApplicationDbContext> contextFactory,
+        IUKTaxCalculationService ukTaxService)
     {
         _contextFactory = contextFactory;
+        _ukTaxService = ukTaxService;
     }
 
     public async Task<PayslipCalculationResult> CalculatePayslipAsync(int employeeId, DateTime payPeriodStart, DateTime payPeriodEnd)
@@ -49,35 +53,35 @@ public class PayslipCalculationService : IPayslipCalculationService
         result.Deductions = await CalculateDeductionsAsync(employee, result.GrossSalary, payPeriodStart, payPeriodEnd);
         result.TotalDeductions = result.Deductions.Sum(d => d.Amount);
         
-        // Calculate tax
-        result.TaxAmount = await CalculateTaxAsync(result.GrossSalary, employeeId);
+        // Calculate UK taxes (Income Tax and National Insurance)
+        var ukTaxResult = await CalculateUKTaxesAsync(result.GrossSalary, employeeId);
+        result.IncomeTax = ukTaxResult.IncomeTax;
+        result.NationalInsurance = ukTaxResult.NationalInsurance;
         
         // Calculate net salary
-        result.NetSalary = await CalculateNetSalaryAsync(result.GrossSalary, result.TotalDeductions, result.TaxAmount);
+        result.NetSalary = await CalculateNetSalaryAsync(result.GrossSalary, result.TotalDeductions, result.IncomeTax + result.NationalInsurance);
         
         return result;
     }
 
+    public async Task<(decimal IncomeTax, decimal NationalInsurance)> CalculateUKTaxesAsync(decimal grossSalary, int employeeId)
+    {
+        // Convert monthly gross salary to annual for UK tax calculations
+        decimal annualGrossSalary = grossSalary * 12;
+        
+        // Calculate UK taxes using the dedicated tax service for monthly period
+        var ukTaxResult = _ukTaxService.CalculateUKTaxDeductions(annualGrossSalary, "1257L", PayFrequency.Monthly);
+        
+        // Return monthly amounts (already calculated for the monthly period)
+        return (ukTaxResult.IncomeTax, ukTaxResult.NationalInsurance);
+    }
+
+    [Obsolete("Replaced with CalculateUKTaxesAsync for UK compliance")]
     public async Task<decimal> CalculateTaxAsync(decimal grossSalary, int employeeId)
     {
-        // Simple progressive tax calculation
-        // In a real system, this would be configurable based on tax brackets and employee location
-        
-        decimal annualSalary = grossSalary * 12;
-        decimal taxRate = 0;
-        
-        if (annualSalary <= 250000) // Up to 250K - 0%
-            taxRate = 0;
-        else if (annualSalary <= 500000) // 250K-500K - 5%
-            taxRate = 0.05m;
-        else if (annualSalary <= 1000000) // 500K-1M - 10%
-            taxRate = 0.10m;
-        else if (annualSalary <= 2000000) // 1M-2M - 15%
-            taxRate = 0.15m;
-        else // Above 2M - 20%
-            taxRate = 0.20m;
-        
-        return Math.Round(grossSalary * taxRate, 2);
+        // Legacy method - kept for backward compatibility
+        var ukTaxes = await CalculateUKTaxesAsync(grossSalary, employeeId);
+        return ukTaxes.IncomeTax + ukTaxes.NationalInsurance;
     }
 
     public async Task<decimal> CalculateGrossSalaryAsync(decimal basicSalary, List<PayslipAllowance> allowances)

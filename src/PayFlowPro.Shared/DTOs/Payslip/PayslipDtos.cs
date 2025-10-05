@@ -138,6 +138,9 @@ namespace PayFlowPro.Shared.DTOs.Payslip
         public decimal GrossPay { get; set; }
         public decimal TotalAllowances { get; set; }
         public decimal TotalDeductions { get; set; }
+        public decimal IncomeTax { get; set; }
+        public decimal NationalInsurance { get; set; }
+        public decimal TotalTax => IncomeTax + NationalInsurance;
         public decimal NetPay { get; set; }
         public List<PayslipAllowanceDto> Allowances { get; set; } = new();
         public List<PayslipDeductionDto> Deductions { get; set; } = new();

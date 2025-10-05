@@ -73,7 +73,7 @@ public class PayslipService : IPayslipService
             GrossSalary = calculation.GrossSalary,
             TotalAllowances = calculation.TotalAllowances,
             TotalDeductions = calculation.TotalDeductions,
-            TaxAmount = calculation.TaxAmount,
+            TaxAmount = calculation.IncomeTax + calculation.NationalInsurance,
             NetSalary = calculation.NetSalary,
             WorkingDays = calculation.WorkingDays,
             ActualWorkingDays = calculation.ActualWorkingDays,

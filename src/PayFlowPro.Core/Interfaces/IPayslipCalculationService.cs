@@ -16,7 +16,9 @@ public class PayslipCalculationResult
     public decimal TotalAllowances { get; set; }
     public decimal GrossSalary { get; set; }
     public decimal TotalDeductions { get; set; }
-    public decimal TaxAmount { get; set; }
+    public decimal IncomeTax { get; set; }
+    public decimal NationalInsurance { get; set; }
+    public decimal TotalTax => IncomeTax + NationalInsurance;
     public decimal NetSalary { get; set; }
     public int WorkingDays { get; set; }
     public int ActualWorkingDays { get; set; }

@@ -18,4 +18,9 @@
     <Using Include="Xunit" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\PayFlowPro.Core\PayFlowPro.Core.csproj" />
+    <ProjectReference Include="..\..\src\PayFlowPro.Models\PayFlowPro.Models.csproj" />
+  </ItemGroup>
+
 </Project>

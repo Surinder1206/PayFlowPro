@@ -60,6 +60,7 @@ builder.Services.AddScoped<IAutoApprovalService, AutoApprovalService>();
 builder.Services.AddScoped<IEmployeeIdentityService, EmployeeIdentityService>();
 builder.Services.AddScoped<IEmailService, EmailService>();
 builder.Services.AddScoped<ICurrencyService, CurrencyService>();
+builder.Services.AddScoped<IUKTaxCalculationService, UKTaxCalculationService>();
 builder.Services.AddScoped<PayFlowPro.Web.Services.DataFixService>();
 
 var app = builder.Build();

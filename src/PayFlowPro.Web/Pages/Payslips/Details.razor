@@ -14,6 +14,7 @@
 @inject IHttpContextAccessor HttpContextAccessor
 @inject ILogger<Details> Logger
 @inject ICurrencyService CurrencyService
+@* @inject IUKTaxCalculationService UKTaxService *@
 @attribute [Authorize]
 
 <div class="container-fluid">
@@ -232,10 +233,30 @@
                                         }
                                         @if (payslip.TaxAmount > 0)
                                         {
-                                            <tr>
-                                                <td>Income Tax</td>
-                                                <td class="text-end"><CurrencyDisplay Amount="payslip.TaxAmount" /></td>
-                                            </tr>
+                                            @if (taxBreakdown.HasValue)
+                                            {
+                                                @if (taxBreakdown.Value.IncomeTax > 0)
+                                                {
+                                                    <tr>
+                                                        <td>Income Tax</td>
+                                                        <td class="text-end"><CurrencyDisplay Amount="taxBreakdown.Value.IncomeTax" /></td>
+                                                    </tr>
+                                                }
+                                                @if (taxBreakdown.Value.NationalInsurance > 0)
+                                                {
+                                                    <tr>
+                                                        <td>National Insurance</td>
+                                                        <td class="text-end"><CurrencyDisplay Amount="taxBreakdown.Value.NationalInsurance" /></td>
+                                                    </tr>
+                                                }
+                                            }
+                                            else
+                                            {
+                                                <tr>
+                                                    <td>Total Tax</td>
+                                                    <td class="text-end"><CurrencyDisplay Amount="payslip.TaxAmount" /></td>
+                                                </tr>
+                                            }
                                         }
                                         <tr class="table-danger">
                                             <td><strong>Total Deductions</strong></td>
@@ -299,6 +320,7 @@
     private bool isAuthorized = false;
     private string? currentUserRole;
     private string? currentUserId;
+    private (decimal IncomeTax, decimal NationalInsurance)? taxBreakdown;
 
     protected override async Task OnInitializedAsync()
     {
@@ -406,6 +428,27 @@
             }
 
             payslip = await query.FirstOrDefaultAsync();
+            
+            // TODO: Calculate UK tax breakdown if payslip exists and has tax amount
+            // if (payslip != null && payslip.TaxAmount > 0)
+            // {
+            //     try
+            //     {
+            //         // Convert monthly gross salary to annual for UK tax calculations
+            //         decimal annualGrossSalary = payslip.GrossSalary * 12;
+            //         
+            //         // Calculate UK taxes using the dedicated tax service for monthly period
+            //         var ukTaxResult = UKTaxService.CalculateUKTaxDeductions(annualGrossSalary, "1257L", PayFrequency.Monthly);
+            //         
+            //         // Store the breakdown
+            //         taxBreakdown = (ukTaxResult.IncomeTax, ukTaxResult.NationalInsurance);
+            //     }
+            //     catch (Exception taxEx)
+            //     {
+            //         // If tax calculation fails, taxBreakdown will remain null and fall back to showing total tax
+            //         Logger.LogWarning(taxEx, "Failed to calculate UK tax breakdown for payslip {PayslipId}", PayslipId);
+            //     }
+            // }
         }
         catch (Exception ex)
         {
