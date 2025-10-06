@@ -1,0 +1,217 @@
+# PayFlowPro CD Pipeline
+# Continuous Deployment pipeline for deploying to Azure
+
+trigger: none # This pipeline is triggered by CI pipeline completion
+
+pr: none
+
+parameters:
+- name: environment
+  displayName: 'Environment to deploy to'
+  type: string
+  default: 'dev'
+  values:
+  - dev
+  - staging
+  - prod
+
+- name: approveProduction
+  displayName: 'Approve production deployment'
+  type: boolean
+  default: false
+
+variables:
+  vmImageName: 'windows-latest'
+  terraformVersion: '1.5.0'
+
+stages:
+- stage: Infrastructure
+  displayName: 'Deploy Infrastructure'
+  jobs:
+  - job: Terraform
+    displayName: 'Terraform Deployment'
+    pool:
+      vmImage: $(vmImageName)
+
+    steps:
+    - download: none
+
+    - task: DownloadPipelineArtifact@2
+      displayName: 'Download Terraform artifact'
+      inputs:
+        buildType: 'current'
+        artifactName: 'terraform'
+        targetPath: '$(Pipeline.Workspace)/terraform'
+
+    - task: TerraformInstaller@1
+      displayName: 'Install Terraform $(terraformVersion)'
+      inputs:
+        terraformVersion: $(terraformVersion)
+
+    - task: AzureCLI@2
+      displayName: 'Terraform Init'
+      inputs:
+        azureSubscription: '$(azureServiceConnection)'
+        scriptType: 'ps'
+        scriptLocation: 'inlineScript'
+        inlineScript: |
+          cd "$(Pipeline.Workspace)/terraform"
+          terraform init -backend-config="resource_group_name=$(terraformStateResourceGroup)" -backend-config="storage_account_name=$(terraformStateStorageAccount)" -backend-config="container_name=tfstate" -backend-config="key=${{ parameters.environment }}.terraform.tfstate"
+
+    - task: AzureCLI@2
+      displayName: 'Terraform Plan'
+      inputs:
+        azureSubscription: '$(azureServiceConnection)'
+        scriptType: 'ps'
+        scriptLocation: 'inlineScript'
+        inlineScript: |
+          cd "$(Pipeline.Workspace)/terraform"
+          terraform plan -var-file="${{ parameters.environment }}.tfvars" -var="sql_admin_password=$(sqlAdminPassword)" -out=tfplan
+      env:
+        TF_VAR_environment: ${{ parameters.environment }}
+
+    - task: AzureCLI@2
+      displayName: 'Terraform Apply'
+      inputs:
+        azureSubscription: '$(azureServiceConnection)'
+        scriptType: 'ps'
+        scriptLocation: 'inlineScript'
+        inlineScript: |
+          cd "$(Pipeline.Workspace)/terraform"
+          terraform apply -auto-approve tfplan
+
+    - task: AzureCLI@2
+      displayName: 'Get Terraform Outputs'
+      inputs:
+        azureSubscription: '$(azureServiceConnection)'
+        scriptType: 'ps'
+        scriptLocation: 'inlineScript'
+        inlineScript: |
+          cd "$(Pipeline.Workspace)/terraform"
+          $webAppName = terraform output -raw web_app_name
+          $resourceGroupName = terraform output -raw resource_group_name
+          $sqlServerName = terraform output -raw sql_server_name
+          $sqlDatabaseName = terraform output -raw sql_database_name
+
+          Write-Host "##vso[task.setvariable variable=webAppName;isOutput=true]$webAppName"
+          Write-Host "##vso[task.setvariable variable=resourceGroupName;isOutput=true]$resourceGroupName"
+          Write-Host "##vso[task.setvariable variable=sqlServerName;isOutput=true]$sqlServerName"
+          Write-Host "##vso[task.setvariable variable=sqlDatabaseName;isOutput=true]$sqlDatabaseName"
+      name: 'terraformOutputs'
+
+- stage: Database
+  displayName: 'Database Migration'
+  dependsOn: Infrastructure
+  variables:
+    webAppName: $[ stageDependencies.Infrastructure.Terraform.outputs['terraformOutputs.webAppName'] ]
+    resourceGroupName: $[ stageDependencies.Infrastructure.Terraform.outputs['terraformOutputs.resourceGroupName'] ]
+    sqlServerName: $[ stageDependencies.Infrastructure.Terraform.outputs['terraformOutputs.sqlServerName'] ]
+    sqlDatabaseName: $[ stageDependencies.Infrastructure.Terraform.outputs['terraformOutputs.sqlDatabaseName'] ]
+
+  jobs:
+  - job: DatabaseMigration
+    displayName: 'Run Database Migrations'
+    pool:
+      vmImage: $(vmImageName)
+
+    steps:
+    - download: none
+
+    - task: DownloadPipelineArtifact@2
+      displayName: 'Download database artifact'
+      inputs:
+        buildType: 'current'
+        artifactName: 'database'
+        targetPath: '$(Pipeline.Workspace)/database'
+
+    - task: SqlAzureDacpacDeployment@1
+      displayName: 'Run SQL Scripts'
+      inputs:
+        azureSubscription: '$(azureServiceConnection)'
+        AuthenticationType: 'server'
+        ServerName: '$(sqlServerName).database.windows.net'
+        DatabaseName: '$(sqlDatabaseName)'
+        SqlUsername: '$(sqlAdminUsername)'
+        SqlPassword: '$(sqlAdminPassword)'
+        deployType: 'SqlTask'
+        SqlFile: '$(Pipeline.Workspace)/database/**/*.sql'
+        IpDetectionMethod: 'AutoDetect'
+
+- stage: Deploy
+  displayName: 'Deploy Application'
+  dependsOn:
+    - Infrastructure
+    - Database
+  variables:
+    webAppName: $[ stageDependencies.Infrastructure.Terraform.outputs['terraformOutputs.webAppName'] ]
+    resourceGroupName: $[ stageDependencies.Infrastructure.Terraform.outputs['terraformOutputs.resourceGroupName'] ]
+
+  jobs:
+  - deployment: DeployWeb
+    displayName: 'Deploy Web Application'
+    pool:
+      vmImage: $(vmImageName)
+    environment: '${{ parameters.environment }}'
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - task: DownloadPipelineArtifact@2
+            displayName: 'Download web artifact'
+            inputs:
+              buildType: 'current'
+              artifactName: 'web-app'
+              targetPath: '$(Pipeline.Workspace)/web-app'
+
+          - task: AzureWebApp@1
+            displayName: 'Deploy to Azure Web App'
+            inputs:
+              azureSubscription: '$(azureServiceConnection)'
+              appType: 'webApp'
+              appName: '$(webAppName)'
+              resourceGroupName: '$(resourceGroupName)'
+              package: '$(Pipeline.Workspace)/web-app/**/*.zip'
+              deploymentMethod: 'auto'
+
+          - task: AzureAppServiceManage@0
+            displayName: 'Restart Azure Web App'
+            inputs:
+              azureSubscription: '$(azureServiceConnection)'
+              Action: 'Restart Azure App Service'
+              WebAppName: '$(webAppName)'
+              ResourceGroupName: '$(resourceGroupName)'
+
+- stage: PostDeployment
+  displayName: 'Post-Deployment Tests'
+  dependsOn: Deploy
+  variables:
+    webAppName: $[ stageDependencies.Infrastructure.Terraform.outputs['terraformOutputs.webAppName'] ]
+
+  jobs:
+  - job: SmokeTests
+    displayName: 'Run Smoke Tests'
+    pool:
+      vmImage: $(vmImageName)
+
+    steps:
+    - task: PowerShell@2
+      displayName: 'Health Check'
+      inputs:
+        targetType: 'inline'
+        script: |
+          $webAppUrl = "https://$(webAppName).azurewebsites.net"
+          Write-Host "Testing application health at: $webAppUrl"
+
+          try {
+            $response = Invoke-WebRequest -Uri $webAppUrl -UseBasicParsing -TimeoutSec 30
+            if ($response.StatusCode -eq 200) {
+              Write-Host "✅ Application is responding correctly"
+              exit 0
+            } else {
+              Write-Host "❌ Application returned status code: $($response.StatusCode)"
+              exit 1
+            }
+          } catch {
+            Write-Host "❌ Failed to reach application: $($_.Exception.Message)"
+            exit 1
+          }

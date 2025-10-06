@@ -1,0 +1,15 @@
+# Environment-specific configuration for development
+project_name       = "payflowpro"
+environment        = "dev"
+location          = "East US"
+app_service_sku   = "B1"
+sql_database_sku  = "S0"
+sql_admin_username = "sqladmin"
+# sql_admin_password should be set via environment variable or Azure DevOps pipeline
+
+tags = {
+  Environment = "dev"
+  Project     = "PayFlowPro"
+  ManagedBy   = "Terraform"
+  Owner       = "DevTeam"
+}

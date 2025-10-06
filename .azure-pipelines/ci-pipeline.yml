@@ -1,0 +1,124 @@
+# PayFlowPro CI Pipeline
+# Continuous Integration pipeline for building and testing the application
+
+trigger:
+  branches:
+    include:
+      - main
+      - master
+      - develop
+  paths:
+    include:
+      - src/*
+      - tests/*
+    exclude:
+      - README.md
+      - docs/*
+
+pr:
+  branches:
+    include:
+      - main
+      - master
+  paths:
+    include:
+      - src/*
+      - tests/*
+
+variables:
+  buildConfiguration: 'Release'
+  dotNetFramework: 'net8.0'
+  dotNetVersion: '8.0.x'
+  vmImageName: 'windows-latest'
+
+stages:
+- stage: Build
+  displayName: 'Build and Test'
+  jobs:
+  - job: Build
+    displayName: 'Build Job'
+    pool:
+      vmImage: $(vmImageName)
+
+    steps:
+    - task: UseDotNet@2
+      displayName: 'Use .NET SDK $(dotNetVersion)'
+      inputs:
+        packageType: 'sdk'
+        version: $(dotNetVersion)
+        includePreviewVersions: false
+
+    - task: DotNetCoreCLI@2
+      displayName: 'Restore NuGet packages'
+      inputs:
+        command: 'restore'
+        projects: '**/*.csproj'
+        feedsToUse: 'select'
+
+    - task: DotNetCoreCLI@2
+      displayName: 'Build solution'
+      inputs:
+        command: 'build'
+        projects: '**/*.csproj'
+        arguments: '--configuration $(buildConfiguration) --no-restore'
+
+    - task: DotNetCoreCLI@2
+      displayName: 'Run unit tests'
+      inputs:
+        command: 'test'
+        projects: '**/tests/**/*.csproj'
+        arguments: '--configuration $(buildConfiguration) --no-build --collect:"XPlat Code Coverage" --logger trx --results-directory $(Agent.TempDirectory)'
+        publishTestResults: true
+
+    - task: PublishCodeCoverageResults@1
+      displayName: 'Publish code coverage'
+      inputs:
+        codeCoverageTool: 'Cobertura'
+        summaryFileLocation: '$(Agent.TempDirectory)/**/coverage.cobertura.xml'
+
+    - task: DotNetCoreCLI@2
+      displayName: 'Publish web application'
+      inputs:
+        command: 'publish'
+        publishWebProjects: true
+        projects: '**/src/PayFlowPro.Web/*.csproj'
+        arguments: '--configuration $(buildConfiguration) --output $(Build.ArtifactStagingDirectory)/web --no-build'
+        zipAfterPublish: true
+        modifyOutputPath: false
+
+    - task: PublishPipelineArtifact@1
+      displayName: 'Publish web artifact'
+      inputs:
+        targetPath: '$(Build.ArtifactStagingDirectory)/web'
+        artifact: 'web-app'
+        publishLocation: 'pipeline'
+
+    - task: CopyFiles@2
+      displayName: 'Copy Terraform files'
+      inputs:
+        SourceFolder: 'terraform'
+        Contents: '**'
+        TargetFolder: '$(Build.ArtifactStagingDirectory)/terraform'
+
+    - task: PublishPipelineArtifact@1
+      displayName: 'Publish Terraform artifact'
+      inputs:
+        targetPath: '$(Build.ArtifactStagingDirectory)/terraform'
+        artifact: 'terraform'
+        publishLocation: 'pipeline'
+
+    - task: CopyFiles@2
+      displayName: 'Copy SQL migration scripts'
+      inputs:
+        SourceFolder: '.'
+        Contents: |
+          **/*.sql
+          **/migrations/**
+        TargetFolder: '$(Build.ArtifactStagingDirectory)/database'
+
+    - task: PublishPipelineArtifact@1
+      displayName: 'Publish database artifact'
+      inputs:
+        targetPath: '$(Build.ArtifactStagingDirectory)/database'
+        artifact: 'database'
+        publishLocation: 'pipeline'
